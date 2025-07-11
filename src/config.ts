@@ -12,13 +12,17 @@ export const Config = Schema.intersect([
             .default('./data/emojiluna'),
         categories: Schema.array(Schema.string())
             .description('预定义分类')
+            .role('table')
             .default(['可爱', '搞笑', '生气', '惊讶', '悲伤', '其他']),
         autoCategorize: Schema.boolean()
             .default(true)
             .description('是否启用AI自动分类'),
         autoAnalyze: Schema.boolean()
             .default(true)
-            .description('是否启用AI信息解析')
+            .description('是否启用AI信息解析'),
+        autoCollect: Schema.boolean()
+            .default(false)
+            .description('是否启用自动获取表情包')
     }).description('基础配置'),
 
     Schema.object({
@@ -103,7 +107,30 @@ export const Config = Schema.intersect([
             .max(3)
             .default(2)
             .description('最多建议新分类数量')
-    }).description('AI功能配置')
+    }).description('AI功能配置'),
+
+    Schema.object({
+        minEmojiSize: Schema.number()
+            .description('单个表情包最小大小(KB)')
+            .min(1)
+            .max(1000)
+            .default(10),
+        maxEmojiSize: Schema.number()
+            .description('单个表情包最大大小(MB)')
+            .min(1)
+            .max(2)
+            .default(2),
+        similarityThreshold: Schema.number()
+            .description('表情包相似度阈值(0-1)')
+            .min(0)
+            .max(1)
+            .role('slider')
+            .default(0.8),
+        whitelistGroups: Schema.array(Schema.string())
+            .description('表情包获取群白名单')
+            .role('table')
+            .default([])
+    }).description('自动获取配置')
 ])
 
 export interface Config {
@@ -112,10 +139,15 @@ export interface Config {
     categories: string[]
     autoCategorize: boolean
     autoAnalyze: boolean
+    autoCollect: boolean
     model: string
     categorizePrompt: string
     analyzePrompt: string
     maxNewCategories: number
+    minEmojiSize: number
+    maxEmojiSize: number
+    similarityThreshold: number
+    whitelistGroups: string[]
 }
 
 export const name = 'emojiluna'

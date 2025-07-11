@@ -1,12 +1,12 @@
 import { Context, Service } from 'koishi'
 import { Config } from './config'
 import {
-    EmojiItem,
-    Category,
-    EmojiSearchOptions,
-    EmojiAddOptions,
+    AIAnalyzeResult,
     AICategorizeResult,
-    AIAnalyzeResult
+    Category,
+    EmojiAddOptions,
+    EmojiItem,
+    EmojiSearchOptions
 } from './types'
 import { generateId } from './utils'
 import path from 'path'
@@ -77,7 +77,7 @@ export class EmojiLunaService extends Service {
 
         try {
             await fs.access(storageDir)
-        } catch (error) {
+        } catch {
             await fs.mkdir(storageDir, { recursive: true })
         }
 
@@ -129,14 +129,11 @@ export class EmojiLunaService extends Service {
                 '{categories}',
                 this.config.categories.join(', ')
             )
-
             const result = await this._model.invoke([
                 new SystemMessage(prompt),
                 new HumanMessage({
                     content: '请分析这个表情包',
-                    additional_kwargs: {
-                        images: [imageBase64]
-                    }
+                    additional_kwargs: { images: [imageBase64] }
                 })
             ])
 
@@ -144,7 +141,7 @@ export class EmojiLunaService extends Service {
                 getMessageContent(result.content)
             )
 
-            if (parsedResult && parsedResult.newCategories) {
+            if (parsedResult?.newCategories) {
                 for (const newCategory of parsedResult.newCategories.slice(
                     0,
                     this.config.maxNewCategories
@@ -171,9 +168,7 @@ export class EmojiLunaService extends Service {
                 new SystemMessage(this.config.analyzePrompt),
                 new HumanMessage({
                     content: '请分析这个表情包',
-                    additional_kwargs: {
-                        images: [imageBase64]
-                    }
+                    additional_kwargs: { images: [imageBase64] }
                 })
             ])
 
@@ -181,7 +176,7 @@ export class EmojiLunaService extends Service {
                 getMessageContent(result.content)
             )
 
-            if (parsedResult && parsedResult.newCategories) {
+            if (parsedResult?.newCategories) {
                 for (const newCategory of parsedResult.newCategories.slice(
                     0,
                     this.config.maxNewCategories
@@ -259,7 +254,6 @@ export class EmojiLunaService extends Service {
         ])
 
         await this.updateCategoryEmojiCount(emoji.category)
-
         this.ctx.emit('emojiluna/emoji-added', emoji)
         return emoji
     }
@@ -272,8 +266,8 @@ export class EmojiLunaService extends Service {
             return { success: 0, failed: 0 }
         }
 
-        let success = 0
-        let failed = 0
+        let success = 0,
+            failed = 0
 
         for (const emoji of Object.values(this._emojiStorage)) {
             try {
@@ -296,14 +290,13 @@ export class EmojiLunaService extends Service {
 
     async getEmojiList(options: EmojiSearchOptions = {}): Promise<EmojiItem[]> {
         const { category, tags, limit = 20, offset = 0 } = options
-
         let emojis = Object.values(this._emojiStorage)
 
         if (category) {
             emojis = emojis.filter((emoji) => emoji.category === category)
         }
 
-        if (tags && tags.length > 0) {
+        if (tags?.length) {
             emojis = emojis.filter((emoji) =>
                 tags.some((tag) => emoji.tags.includes(tag))
             )
@@ -332,7 +325,6 @@ export class EmojiLunaService extends Service {
         try {
             await fs.unlink(emoji.path)
             delete this._emojiStorage[id]
-
             await this.ctx.database.remove('emojiluna_emojis', { id })
             await this.updateCategoryEmojiCount(emoji.category)
             this.ctx.emit('emojiluna/emoji-deleted', id)

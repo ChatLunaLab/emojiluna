@@ -25,7 +25,23 @@
     "url": "https://github.com/ChatLunaLab/emojiluna.git",
     "directory": "."
   },
-  "dependencies": {},
+  "dependencies": {
+    "@langchain/core": "^0.3.43"
+  },
+  "resolutions": {
+    "@langchain/core": "0.3.43",
+    "js-tiktoken": "npm:@dingyi222666/js-tiktoken@^1.0.19"
+  },
+  "overrides": {
+    "@langchain/core": "0.3.43",
+    "js-tiktoken": "npm:@dingyi222666/js-tiktoken@^1.0.19"
+  },
+  "pnpm": {
+    "overrides": {
+      "@langchain/core": "0.3.43",
+      "js-tiktoken": "npm:@dingyi222666/js-tiktoken@^1.0.19"
+    }
+  },
   "devDependencies": {
     "@koishijs/client": "^5.30.7",
     "@typescript-eslint/eslint-plugin": "^7.18.1-alpha.3",
@@ -46,7 +62,7 @@
   },
   "peerDependencies": {
     "koishi": "^4.18.7",
-     "koishi-plugin-chatluna": "^1.2.0"
+    "koishi-plugin-chatluna": "^1.2.0"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -61,7 +77,7 @@
   },
   "koishi": {
     "description": {
-      "zh": "智能表情包管理插件，支持AI自动分类、标签管理和快速搜索"
+      "zh": "智能表情包管理插件，支持自动获取群聊表情包，AI自动分类、标签管理和快速搜索"
     },
     "service": {
       "implements": [

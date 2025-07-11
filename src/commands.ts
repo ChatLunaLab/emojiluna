@@ -1,6 +1,6 @@
 import { Context, h } from 'koishi'
 import { Config } from './config'
-import { handleImageUpload, formatFileSize } from './utils'
+import { formatFileSize, handleImageUpload } from './utils'
 import fs from 'fs/promises'
 
 export function applyCommands(ctx: Context, config: Config) {
@@ -8,7 +8,8 @@ export function applyCommands(ctx: Context, config: Config) {
         const emojiluna = ctx.emojiluna
 
         ctx.command('emojiluna', '表情包管理插件')
-            .subcommand('add <name:string>', '添加表情包')
+
+        ctx.command('emojiluna.add <name:string>', '添加表情包')
             .option('category', '-c <category:string> 指定分类')
             .option('tags', '-t <tags:string> 添加标签，用逗号分隔')
             .option('no-ai', '-n 禁用AI分析')
@@ -142,7 +143,8 @@ export function applyCommands(ctx: Context, config: Config) {
         )
 
         ctx.command('emojiluna.category', '分类管理')
-            .subcommand('add <name:string>', '添加分类')
+
+        ctx.command('emojiluna.category.add <name:string>', '添加分类')
             .option('description', '-d <description:string> 分类描述')
             .action(async ({ session, options }, name) => {
                 if (!name) return '请输入分类名称'
@@ -197,8 +199,9 @@ export function applyCommands(ctx: Context, config: Config) {
         )
 
         ctx.command('emojiluna.tags', '标签管理')
-            .subcommand('list', '查看所有标签')
-            .action(async ({ session }) => {
+
+        ctx.command('emojiluna.tags.list', '查看所有标签').action(
+            async ({ session }) => {
                 const tags = await emojiluna.getAllTags()
 
                 if (tags.length === 0) {
@@ -206,7 +209,8 @@ export function applyCommands(ctx: Context, config: Config) {
                 }
 
                 return `所有标签 (${tags.length} 个):\n${tags.join(', ')}`
-            })
+            }
+        )
 
         ctx.command(
             'emojiluna.tags.update <id:string> <tags:string>',
@@ -242,8 +246,9 @@ export function applyCommands(ctx: Context, config: Config) {
         })
 
         ctx.command('emojiluna.ai', 'AI功能')
-            .subcommand('categorize', '批量AI分类现有表情包')
-            .action(async ({ session }) => {
+
+        ctx.command('emojiluna.ai.categorize', '批量AI分类现有表情包').action(
+            async ({ session }) => {
                 if (!config.autoCategorize) {
                     return 'AI分类功能未启用'
                 }
@@ -252,7 +257,8 @@ export function applyCommands(ctx: Context, config: Config) {
                 const result = await emojiluna.categorizeExistingEmojis()
 
                 return `批量分类完成！\n成功: ${result.success} 个\n失败: ${result.failed} 个`
-            })
+            }
+        )
 
         ctx.command('emojiluna.ai.analyze <id:string>', 'AI分析表情包').action(
             async ({ session }, id) => {
