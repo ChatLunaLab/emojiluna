@@ -24,7 +24,12 @@ export const Config = Schema.intersect([
             .description('是否启用AI信息解析'),
         autoCollect: Schema.boolean()
             .default(false)
-            .description('是否启用自动获取表情包')
+            .description('是否启用自动获取表情包'),
+        triggerWithName: Schema.boolean()
+            .default(false)
+            .description(
+                '是否启用触发词匹配，当已有表情包名称与消息匹配时，自动发送表情包'
+            )
     }).description('基础配置'),
 
     Schema.object({
@@ -140,6 +145,7 @@ export interface Config {
     storagePath: string
     categories: string[]
     autoCategorize: boolean
+    triggerWithName: boolean
     autoAnalyze: boolean
     autoCollect: boolean
     model: string

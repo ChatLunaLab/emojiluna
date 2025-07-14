@@ -7,6 +7,22 @@ export function applyCommands(ctx: Context, config: Config) {
     ctx.inject(['emojiluna'], (ctx) => {
         const emojiluna = ctx.emojiluna
 
+        ctx.middleware(async (session, next) => {
+            if (!config.triggerWithName) {
+                return next()
+            }
+            return next(async (next) => {
+                const emoji = await emojiluna.getEmojiByName(session.content)
+                if (!emoji) {
+                    return next()
+                }
+                const imageBuffer = await fs.readFile(emoji.path)
+                const mimeType = getImageType(imageBuffer)
+                const base64 = imageBuffer.toString('base64')
+
+                return h.image(`data:${mimeType};base64,${base64}`)
+            })
+        })
         ctx.command('emojiluna <name:string>', '表情包管理').action(
             async ({ session }, name) => {
                 if (!name) return '请输入表情包名称'
