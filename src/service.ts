@@ -8,7 +8,7 @@ import {
     EmojiItem,
     EmojiSearchOptions
 } from './types'
-import { generateId } from './utils'
+import { chunkArray, generateId } from './utils'
 import path from 'path'
 import fs from 'fs/promises'
 import { randomUUID } from 'crypto'
@@ -93,7 +93,7 @@ export class EmojiLunaService extends Service {
         })
     }
 
-    private async initializeAI() {
+    public async initializeAI() {
         if (!this.config.autoCategorize && !this.config.autoAnalyze) return
 
         try {
@@ -207,6 +207,8 @@ export class EmojiLunaService extends Service {
         )
         const filePath = path.join(storageDir, fileName)
 
+        await fs.mkdir(storageDir, { recursive: true })
+
         await fs.writeFile(filePath, imageData)
 
         let finalOptions = { ...options }
@@ -254,8 +256,29 @@ export class EmojiLunaService extends Service {
         ])
 
         await this.updateCategoryEmojiCount(emoji.category)
+        this.ctx.logger.success(`Emoji added: ${emoji.name} (${emoji.id})`)
         this.ctx.emit('emojiluna/emoji-added', emoji)
         return emoji
+    }
+
+    async getEmojiByName(name: string): Promise<EmojiItem | null> {
+        return (
+            Object.values(this._emojiStorage).find(
+                (emoji) =>
+                    emoji.name === name ||
+                    emoji.tags.some((tag) => tag === name) ||
+                    emoji.category === name
+            ) || null
+        )
+    }
+
+    async getEmojisByName(name: string): Promise<EmojiItem[]> {
+        return Object.values(this._emojiStorage).filter(
+            (emoji) =>
+                emoji.name === name ||
+                emoji.tags.some((tag) => tag === name) ||
+                emoji.category === name
+        )
     }
 
     async categorizeExistingEmojis(): Promise<{
@@ -333,6 +356,22 @@ export class EmojiLunaService extends Service {
             this.ctx.logger.error(`Failed to delete emoji ${id}:`, error)
             return false
         }
+    }
+
+    async deleteAllEmojis(): Promise<boolean> {
+        try {
+            const promises = Object.values(this._emojiStorage).map((emoji) =>
+                this.deleteEmoji(emoji.id)
+            )
+            const chunkedPromises = chunkArray(promises, 4)
+            for (const chunk of chunkedPromises) {
+                await Promise.all(chunk)
+            }
+        } catch (error) {
+            this.ctx.logger.error('Failed to delete all emojis:', error)
+            return false
+        }
+        return true
     }
 
     async addCategory(name: string, description?: string): Promise<Category> {

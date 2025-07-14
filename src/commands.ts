@@ -1,13 +1,25 @@
 import { Context, h } from 'koishi'
 import { Config } from './config'
-import { formatFileSize, handleImageUpload } from './utils'
+import { formatFileSize, getImageType, handleImageUpload } from './utils'
 import fs from 'fs/promises'
 
 export function applyCommands(ctx: Context, config: Config) {
     ctx.inject(['emojiluna'], (ctx) => {
         const emojiluna = ctx.emojiluna
 
-        ctx.command('emojiluna', '表情包管理插件')
+        ctx.command('emojiluna <name:string>', '表情包管理').action(
+            async ({ session }, name) => {
+                if (!name) return '请输入表情包名称'
+                const emoji = await emojiluna.getEmojiByName(name)
+                if (!emoji) return '表情包不存在'
+
+                const imageBuffer = await fs.readFile(emoji.path)
+                const mimeType = getImageType(imageBuffer)
+                const base64 = imageBuffer.toString('base64')
+
+                return h.image(`data:${mimeType};base64,${base64}`)
+            }
+        )
 
         ctx.command('emojiluna.add <name:string>', '添加表情包')
             .option('category', '-c <category:string> 指定分类')
@@ -76,16 +88,21 @@ export function applyCommands(ctx: Context, config: Config) {
                 }
 
                 const total = emojiluna.getEmojiCount()
-                const list = emojis
-                    .map(
-                        (emoji, index) =>
-                            `${options.offset + index + 1}. ${emoji.name} (${emoji.id})\n   分类: ${emoji.category}\n   标签: ${
-                                emoji.tags.join(', ') || '无'
-                            }\n   大小: ${formatFileSize(emoji.size)}`
-                    )
-                    .join('\n\n')
+                const list = await Promise.all(
+                    emojis.map(async (emoji, index) => {
+                        const imageBuffer = await fs.readFile(emoji.path)
+                        const mimeType = getImageType(imageBuffer)
+                        const base64 = imageBuffer.toString('base64')
 
-                return `表情包列表 (${emojis.length}/${total}):\n\n${list}`
+                        return `${options.offset + index + 1}. ${emoji.name} (${emoji.id})\n\n <img src="data:${mimeType};base64,${base64}" />\m\n   分类: ${emoji.category}\n   标签: ${
+                            emoji.tags.join(', ') || '无'
+                        }\n   大小: ${formatFileSize(emoji.size)}`
+                    })
+                ).then((list) => list.join('\n\n'))
+
+                return h.parse(
+                    `表情包列表 (${emojis.length}/${total}):\n\n${list}`
+                )
             })
 
         ctx.command('emojiluna.search <keyword:string>', '搜索表情包').action(
@@ -98,16 +115,19 @@ export function applyCommands(ctx: Context, config: Config) {
                     return `没有找到包含 "${keyword}" 的表情包`
                 }
 
-                const list = emojis
-                    .map(
-                        (emoji, index) =>
-                            `${index + 1}. ${emoji.name} (${emoji.id})\n   分类: ${emoji.category}\n   标签: ${
-                                emoji.tags.join(', ') || '无'
-                            }`
-                    )
-                    .join('\n\n')
+                const list = await Promise.all(
+                    emojis.map(async (emoji, index) => {
+                        const imageBuffer = await fs.readFile(emoji.path)
+                        const mimeType = getImageType(imageBuffer)
+                        const base64 = imageBuffer.toString('base64')
 
-                return `搜索结果 (${emojis.length} 个):\n\n${list}`
+                        return `${index + 1}. ${emoji.name} (${emoji.id})\n <img src="data:${mimeType};base64,${base64}" />  分类: ${emoji.category}\n   标签: ${
+                            emoji.tags.join(', ') || '无'
+                        }`
+                    })
+                ).then((list) => list.join('\n\n'))
+
+                return h.parse(`搜索结果 (${emojis.length} 个):\n\n${list}`)
             }
         )
 
@@ -122,7 +142,7 @@ export function applyCommands(ctx: Context, config: Config) {
 
                 try {
                     const imageBuffer = await fs.readFile(emoji.path)
-                    return h.image(imageBuffer, 'image/png')
+                    return h.image(imageBuffer, getImageType(imageBuffer))
                 } catch (error) {
                     return '读取表情包文件失败'
                 }
@@ -136,6 +156,17 @@ export function applyCommands(ctx: Context, config: Config) {
                 const success = await emojiluna.deleteEmoji(id)
                 if (success) {
                     return '表情包删除成功'
+                } else {
+                    return '表情包不存在或删除失败'
+                }
+            }
+        )
+
+        ctx.command('emojiluna.wipe', '删除所有表情包').action(
+            async ({ session }) => {
+                const success = await emojiluna.deleteAllEmojis()
+                if (success) {
+                    return '所有表情包删除成功'
                 } else {
                     return '表情包不存在或删除失败'
                 }

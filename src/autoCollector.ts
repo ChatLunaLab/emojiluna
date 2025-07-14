@@ -1,7 +1,6 @@
 import { Context, h, Session } from 'koishi'
 import { Config } from './config'
 import fs from 'fs/promises'
-import path from 'path'
 import crypto from 'crypto'
 
 export interface AutoCollectOptions {
@@ -103,9 +102,7 @@ export class AutoCollector {
         }
 
         this.ctx.on('message', async (session: Session) => {
-            console.log(session.guildId)
             if (!this.shouldProcessMessage(session)) return
-            console.log(2, session.guildId)
 
             const images = h.select(session.elements, 'img')
             if (images.length === 0) return
@@ -502,15 +499,23 @@ export class AutoCollector {
 
     private async saveEmoji(imageInfo: ImageInfo, session: Session) {
         try {
+            if (this.emojiHashes.has(imageInfo.hash)) {
+                this.ctx.logger.debug('Duplicate image detected, skipping')
+                return
+            }
+
+            if (await this.isSimilarToExisting(imageInfo)) {
+                this.ctx.logger.debug('Similar image detected, skipping')
+                return
+            }
+
             const timestamp = Date.now()
-            const fileName = `auto_${timestamp}_${imageInfo.hash.slice(0, 8)}.${imageInfo.format}`
-            const filePath = path.join(this.config.storagePath, fileName)
 
             await fs.mkdir(this.config.storagePath, { recursive: true })
-            await fs.writeFile(filePath, imageInfo.buffer)
 
             const emojiName = `自动获取_${timestamp}`
-            const emoji = await this.ctx.emojiluna.addEmoji(
+
+            await this.ctx.emojiluna.addEmoji(
                 {
                     name: emojiName,
                     category: '其他',
@@ -523,10 +528,6 @@ export class AutoCollector {
 
             const features = await this.extractImageFeatures(imageInfo.buffer)
             this.imageFeatures.set(imageInfo.hash, features)
-
-            this.ctx.logger.info(
-                `Auto collected emoji: ${emojiName} (${emoji.id}) from group ${session.channelId}`
-            )
         } catch (error) {
             this.ctx.logger.error(`Failed to save emoji: ${error.message}`)
         }

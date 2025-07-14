@@ -7,7 +7,9 @@ export const Config = Schema.intersect([
             .min(10)
             .max(1000)
             .default(100),
-        storagePath: Schema.string()
+        storagePath: Schema.path({
+            filters: ['directory']
+        })
             .description('表情包存储路径')
             .default('./data/emojiluna'),
         categories: Schema.array(Schema.string())
