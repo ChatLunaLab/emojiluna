@@ -29,6 +29,7 @@ export interface EmojiAddOptions {
     category?: string
     tags?: string[]
     description?: string
+    imageData?: string
 }
 
 export interface AICategorizeResult {
@@ -44,4 +45,30 @@ export interface AIAnalyzeResult {
     tags: string[]
     description: string
     newCategories?: string[]
+}
+
+declare module '@koishijs/console' {
+    interface Events {
+        'emojiluna/getEmojiList': (
+            options?: EmojiSearchOptions
+        ) => Promise<EmojiItem[]>
+        'emojiluna/searchEmoji': (keyword: string) => Promise<EmojiItem[]>
+        'emojiluna/getCategories': () => Promise<Category[]>
+        'emojiluna/getAllTags': () => Promise<string[]>
+        'emojiluna/updateEmojiTags': (
+            id: string,
+            tags: string[]
+        ) => Promise<boolean>
+        'emojiluna/updateEmojiCategory': (
+            id: string,
+            category: string
+        ) => Promise<boolean>
+        'emojiluna/deleteEmoji': (id: string) => Promise<boolean>
+        'emojiluna/addCategory': (
+            name: string,
+            description: string
+        ) => Promise<Category>
+        'emojiluna/deleteCategory': (id: string) => Promise<boolean>
+        'emojiluna/addEmoji': (emojiData: EmojiAddOptions) => Promise<EmojiItem>
+    }
 }

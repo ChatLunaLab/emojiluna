@@ -2,6 +2,8 @@ import { Context } from 'koishi'
 import { Config } from '.'
 import type {} from '@koishijs/plugin-server'
 import fs from 'fs/promises'
+import type {} from '@koishijs/plugin-console'
+import { resolve } from 'path'
 
 export async function applyBackend(ctx: Context, config: Config) {
     if (config.injectVariables) {
@@ -20,6 +22,81 @@ export async function applyBackend(ctx: Context, config: Config) {
     if (!config.backendServer) {
         return
     }
+
+    ctx.inject(['console'], (ctx) => {
+        ctx.console.addEntry({
+            dev: resolve(__dirname, '../client/index.ts'),
+            prod: resolve(__dirname, '../dist')
+        })
+
+        ctx.console.addListener(
+            'emojiluna/getEmojiList',
+            async (options = {}) => {
+                return await ctx.emojiluna.getEmojiList(options)
+            }
+        )
+
+        ctx.console.addListener('emojiluna/searchEmoji', async (keyword) => {
+            return await ctx.emojiluna.searchEmoji(keyword)
+        })
+
+        ctx.console.addListener('emojiluna/getCategories', async () => {
+            return await ctx.emojiluna.getCategories()
+        })
+
+        ctx.console.addListener('emojiluna/getAllTags', async () => {
+            return await ctx.emojiluna.getAllTags()
+        })
+
+        ctx.console.addListener(
+            'emojiluna/updateEmojiTags',
+            async (id, tags) => {
+                return await ctx.emojiluna.updateEmojiTags(id, tags)
+            }
+        )
+
+        ctx.console.addListener(
+            'emojiluna/updateEmojiCategory',
+            async (id, category) => {
+                return await ctx.emojiluna.updateEmojiCategory(id, category)
+            }
+        )
+
+        ctx.console.addListener('emojiluna/deleteEmoji', async (id) => {
+            return await ctx.emojiluna.deleteEmoji(id)
+        })
+
+        ctx.console.addListener(
+            'emojiluna/addCategory',
+            async (name, description) => {
+                return await ctx.emojiluna.addCategory(name, description)
+            }
+        )
+
+        ctx.console.addListener('emojiluna/deleteCategory', async (id) => {
+            return await ctx.emojiluna.deleteCategory(id)
+        })
+
+        ctx.console.addListener('emojiluna/addEmoji', async (emojiData) => {
+            // 处理base64图片数据
+            const { name, category, tags, imageData } = emojiData
+
+            if (!imageData || !name) {
+                throw new Error('图片数据和名称为必填项')
+            }
+
+            // 将base64转换为Buffer
+            const buffer = Buffer.from(imageData, 'base64')
+
+            const options = {
+                name,
+                category: category || '其他',
+                tags: tags || []
+            }
+
+            return await ctx.emojiluna.addEmoji(options, buffer)
+        })
+    })
 
     ctx.inject(['server'], (ctx) => {
         ctx.server.get(`${config.backendPath}/list`, async (koa) => {
