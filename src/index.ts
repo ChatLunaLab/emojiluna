@@ -5,14 +5,16 @@ import { applyCommands } from './commands'
 import { AutoCollector } from './autoCollector'
 import { PlatformService } from 'koishi-plugin-chatluna/llm-core/platform/service'
 import { ModelType } from 'koishi-plugin-chatluna/llm-core/platform/types'
+import { applyBackend } from './backend'
 
 export function apply(ctx: Context, config: Config) {
     ctx.plugin(EmojiLunaService, config)
 
     ctx.on('ready', () => {
-        applyCommands(ctx, config)
-
         ctx.inject(['emojiluna'], (ctx) => {
+            applyCommands(ctx, config)
+            applyBackend(ctx, config)
+
             const autoCollector = new AutoCollector(ctx, config)
 
             autoCollector.start()

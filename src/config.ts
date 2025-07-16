@@ -117,6 +117,18 @@ export const Config = Schema.intersect([
     }).description('AI功能配置'),
 
     Schema.object({
+        injectVariables: Schema.boolean()
+            .default(true)
+            .description('是否启用变量注入到 ChatLuna'),
+        backendServer: Schema.boolean()
+            .description('是否启用后端服务器')
+            .default(false),
+        backendPath: Schema.string()
+            .description('后端服务器路径')
+            .default('/emojiluna')
+    }).description('API 配置'),
+
+    Schema.object({
         minEmojiSize: Schema.number()
             .description('单个表情包最小大小(KB)')
             .min(1)
@@ -156,6 +168,9 @@ export interface Config {
     maxEmojiSize: number
     similarityThreshold: number
     whitelistGroups: string[]
+    injectVariables: boolean
+    backendServer: boolean
+    backendPath: string
 }
 
 export const name = 'emojiluna'
