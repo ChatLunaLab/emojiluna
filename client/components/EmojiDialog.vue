@@ -13,8 +13,8 @@
                 </el-select>
             </el-form-item>
 
-            <el-form-item :label="t('emojiluna.tags')">
-                <el-select v-model="form.tags" :placeholder="t('emojiluna.tags')" style="width: 100%" multiple
+            <el-form-item :label="t('emojiluna.tags.default')">
+                <el-select v-model="form.tags" :placeholder="t('emojiluna.tags.default')" style="width: 100%" multiple
                     filterable allow-create default-first-option>
                     <el-option v-for="tag in allTags" :key="tag" :label="tag" :value="tag" />
                 </el-select>

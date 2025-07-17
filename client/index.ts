@@ -1,8 +1,5 @@
-/* eslint-disable @typescript-eslint/naming-convention */
 import { Context, icons } from '@koishijs/client'
-import HomeView from './home.vue'
-import TagsView from './tags.vue'
-import CategoriesView from './categories.vue'
+import DashboardView from './dashboard.vue'
 import { i18n } from './i18n'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import { h } from 'vue'
@@ -36,23 +33,7 @@ export default (ctx: Context) => {
         name: '表情包管理',
         path: '/emojiluna/webui',
         icon: 'Picture',
-        component: HomeView,
-        authority: 0
-    })
-
-    ctx.page({
-        name: '标签管理',
-        path: '/emojiluna/webui-tags',
-        icon: 'PriceTag',
-        component: TagsView,
-        authority: 0
-    })
-
-    ctx.page({
-        name: '分类管理',
-        path: '/emojiluna/webui-categories',
-        icon: 'FolderOpened',
-        component: CategoriesView,
+        component: DashboardView,
         authority: 0
     })
 }

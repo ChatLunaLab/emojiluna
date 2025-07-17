@@ -70,5 +70,6 @@ declare module '@koishijs/console' {
         ) => Promise<Category>
         'emojiluna/deleteCategory': (id: string) => Promise<boolean>
         'emojiluna/addEmoji': (emojiData: EmojiAddOptions) => Promise<EmojiItem>
+        'emojiluna/getBaseUrl': () => Promise<string>
     }
 }

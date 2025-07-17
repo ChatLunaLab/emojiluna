@@ -25,6 +25,11 @@ const messages = {
             addFailed: '添加失败',
             deleteFailed: '删除失败',
             updateFailed: '更新失败',
+            tabs: {
+                emojis: '表情包管理',
+                tags: '标签管理',
+                categories: '分类管理'
+            },
             categories: {
                 title: '分类管理',
                 add: '添加分类',
@@ -43,6 +48,7 @@ const messages = {
                 delete: '删除标签',
                 name: '标签名称',
                 usage: '使用次数',
+                default: '标签',
                 confirmDelete:
                     '确定要删除这个标签吗？此操作将会从所有表情包中移除该标签。'
             },

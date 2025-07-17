@@ -96,6 +96,10 @@ export async function applyBackend(ctx: Context, config: Config) {
 
             return await ctx.emojiluna.addEmoji(options, buffer)
         })
+
+        ctx.console.addListener('emojiluna/getBaseUrl', async () => {
+            return ctx.server.selfUrl + config.backendPath
+        })
     })
 
     ctx.inject(['server'], (ctx) => {
