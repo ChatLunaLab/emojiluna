@@ -148,7 +148,19 @@ export const Config = Schema.intersect([
         whitelistGroups: Schema.array(Schema.string())
             .description('表情包获取群白名单')
             .role('table')
-            .default([])
+            .default([]),
+        groupAutoCollectLimit: Schema.dict(
+            Schema.object({
+                hourLimit: Schema.number()
+                    .default(20)
+                    .description('每小时自动获取表情包数量限制'),
+                dayLimit: Schema.number()
+                    .default(100)
+                    .description('每天自动获取表情包数量限制')
+            })
+        )
+            .role('table')
+            .description('群组自动获取表情包限制')
     }).description('自动获取配置')
 ])
 
@@ -171,6 +183,10 @@ export interface Config {
     injectVariables: boolean
     backendServer: boolean
     backendPath: string
+    groupAutoCollectLimit: Record<
+        string,
+        { hourLimit: number; dayLimit: number }
+    >
 }
 
 export const name = 'emojiluna'

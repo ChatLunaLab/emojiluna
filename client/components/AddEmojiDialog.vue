@@ -86,10 +86,10 @@
 
         <template #footer>
             <span class="dialog-footer">
-                <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
                 <el-button type="primary" @click="handleSubmit" :loading="loading" :disabled="!canSubmit">
                     {{ t('common.add') }}
                 </el-button>
+                <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
             </span>
         </template>
     </el-dialog>

@@ -23,7 +23,7 @@ export async function applyBackend(ctx: Context, config: Config) {
         return
     }
 
-    ctx.inject(['console'], (ctx) => {
+    ctx.inject(['console', 'server'], (ctx) => {
         ctx.console.addEntry({
             dev: resolve(__dirname, '../client/index.ts'),
             prod: resolve(__dirname, '../dist')

@@ -267,7 +267,8 @@ export class EmojiLunaService extends Service {
                 (emoji) =>
                     emoji.name === name ||
                     emoji.tags.some((tag) => tag === name) ||
-                    emoji.category === name
+                    emoji.category === name ||
+                    emoji.id === name
             ) || null
         )
     }

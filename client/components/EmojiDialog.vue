@@ -1,6 +1,6 @@
 <template>
-    <el-dialog v-model="visible" :title="t('emojiluna.editEmoji')" width="500px" @close="handleClose">
-        <el-form :model="form" label-width="80px" v-loading="loading">
+    <el-dialog v-model="visible" :title="t('emojiluna.editEmoji')" width="600px" @close="handleClose">
+        <el-form :model="form" label-width="100px" v-loading="loading">
             <el-form-item :label="t('emojiluna.emojiName')">
                 <el-input v-model="form.name" :placeholder="t('emojiluna.emojiName')" />
             </el-form-item>
@@ -29,10 +29,10 @@
 
         <template #footer>
             <span class="dialog-footer">
-                <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
                 <el-button type="primary" @click="handleSave" :loading="loading">
                     {{ t('common.save') }}
                 </el-button>
+                <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
             </span>
         </template>
     </el-dialog>
@@ -43,7 +43,7 @@ import { ref, reactive, watch, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { send } from '@koishijs/client'
 import { ElMessage } from 'element-plus'
-import type { EmojiItem, Category } from '../types'
+import type { EmojiItem, Category } from 'koishi-plugin-emojiluna'
 
 interface Props {
     modelValue: boolean

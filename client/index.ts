@@ -5,6 +5,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import { h } from 'vue'
 import 'virtual:uno.css'
 import type {} from 'koishi-plugin-emojiluna'
+import Emoji from './icons/emoji.vue'
 
 const viewportMeta = document.createElement('meta')
 viewportMeta.name = 'viewport'
@@ -15,6 +16,7 @@ const createIconComponent = (IconComponent: typeof ElementPlusIconsVue.Aim) => {
     return () => h(IconComponent)
 }
 
+icons.register('Emoji', Emoji)
 icons.register('Picture', createIconComponent(ElementPlusIconsVue.Picture))
 icons.register('PriceTag', createIconComponent(ElementPlusIconsVue.PriceTag))
 icons.register(
@@ -30,9 +32,9 @@ export default (ctx: Context) => {
     }
 
     ctx.page({
-        name: '表情包管理',
+        name: 'EmojiLuna',
         path: '/emojiluna/webui',
-        icon: 'Picture',
+        icon: 'Emoji',
         component: DashboardView,
         authority: 0
     })

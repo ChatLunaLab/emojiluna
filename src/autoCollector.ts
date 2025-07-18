@@ -8,6 +8,10 @@ export interface AutoCollectOptions {
     maxSize: number
     similarityThreshold: number
     whitelistGroups: string[]
+    groupAutoCollectLimit: Record<
+        string,
+        { hourLimit: number; dayLimit: number }
+    >
 }
 
 export interface ImageInfo {
@@ -30,6 +34,16 @@ export class AutoCollector {
     private options: AutoCollectOptions
     private emojiHashes = new Set<string>()
     private imageFeatures = new Map<string, ImageFeatures>()
+    private static readonly MAX_HASHES = 10000
+    private groupAutoCollectLimit: Record<
+        string,
+        {
+            hourLimit: number
+            dayLimit: number
+            lastDayTimestamp: number
+            lastHourTimestamp: number
+        }
+    > = {}
 
     constructor(ctx: Context, config: Config) {
         this.ctx = ctx
@@ -38,7 +52,8 @@ export class AutoCollector {
             minSize: config.minEmojiSize,
             maxSize: config.maxEmojiSize,
             similarityThreshold: config.similarityThreshold,
-            whitelistGroups: config.whitelistGroups
+            whitelistGroups: config.whitelistGroups,
+            groupAutoCollectLimit: config.groupAutoCollectLimit
         }
         this.loadExistingHashes()
         this.registerCommands()
@@ -68,6 +83,49 @@ export class AutoCollector {
                 `Failed to load existing emoji hashes: ${error.message}`
             )
         }
+    }
+
+    private async checkHitLimit(session: Session): Promise<boolean> {
+        const groupId = session.guildId || session.channelId
+        const currentTime = Date.now()
+
+        if (!this.groupAutoCollectLimit[groupId]) {
+            this.groupAutoCollectLimit[groupId] = {
+                hourLimit:
+                    this.options.groupAutoCollectLimit[groupId]?.hourLimit ||
+                    20,
+                dayLimit:
+                    this.options.groupAutoCollectLimit[groupId]?.dayLimit ||
+                    100,
+                lastDayTimestamp: currentTime,
+                lastHourTimestamp: currentTime
+            }
+        }
+
+        const limit = this.groupAutoCollectLimit[groupId]
+        const hourPassed = currentTime - limit.lastHourTimestamp >= 3600000
+        const dayPassed = currentTime - limit.lastDayTimestamp >= 86400000
+
+        if (hourPassed) {
+            limit.lastHourTimestamp = currentTime
+            limit.hourLimit =
+                this.options.groupAutoCollectLimit[groupId]?.hourLimit || 20
+        }
+
+        if (dayPassed) {
+            limit.lastDayTimestamp = currentTime
+            limit.dayLimit =
+                this.options.groupAutoCollectLimit[groupId]?.dayLimit || 100
+        }
+
+        if (limit.hourLimit <= 0 || limit.dayLimit <= 0) {
+            return false
+        }
+
+        limit.hourLimit--
+        limit.dayLimit--
+
+        return true
     }
 
     private registerCommands() {
@@ -106,6 +164,13 @@ export class AutoCollector {
 
             const images = h.select(session.elements, 'img')
             if (images.length === 0) return
+
+            if (!(await this.checkHitLimit(session))) {
+                this.ctx.logger.debug(
+                    `Hit auto collect limit for group ${session.guildId || session.channelId}`
+                )
+                return
+            }
 
             for (const image of images) {
                 await this.processImage(image, session)
@@ -539,7 +604,8 @@ export class AutoCollector {
             minSize: config.minEmojiSize,
             maxSize: config.maxEmojiSize,
             similarityThreshold: config.similarityThreshold,
-            whitelistGroups: config.whitelistGroups
+            whitelistGroups: config.whitelistGroups,
+            groupAutoCollectLimit: config.groupAutoCollectLimit
         }
     }
 
