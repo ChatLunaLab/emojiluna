@@ -183,7 +183,7 @@ const showEditDialog = ref(false)
 const selectedEmoji = ref<EmojiItem>()
 
 // 配置
-const baseUrl = computed(() => '/emojiluna')
+const baseUrl = ref('')
 
 // 数据加载
 const loadEmojis = async () => {
@@ -225,6 +225,7 @@ const loadEmojis = async () => {
 const loadCategories = async () => {
   try {
     categories.value = await send('emojiluna/getCategories') || []
+    baseUrl.value = await send('emojiluna/getBaseUrl') || '/emojiluna'
   } catch (error) {
     console.error('Failed to load categories:', error)
   }
