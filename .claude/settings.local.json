@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: optimize emoji list retrieval and sort dependencies\n\n- Remove default limit (20) from getEmojiList to allow unlimited retrieval\n- Sort dependencies alphabetically in package.json\n- Fix dependency ordering in peerDependencies section\n\n🤖 Generated with [Claude Code](https://claude.ai/code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nrefactor: update AI response schema and handling for single category suggestion\n\n- 修改配置文件中的AI提示词，将newCategories数组改为newCategory单个分类建议\n- 更新服务层代码，调整AI分类结果处理逻辑，支持单个新分类的处理\n- 更新类型定义，将AICategorizeResult和AIAnalyzeResult中的newCategories字段改为newCategory\n\nThis change simplifies the AI categorization interface and makes the plugin more predictable when handling AI suggestions.\n\n🤖 Generated with [Claude Code](https://claude.ai/code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+    ],
+    "deny": []
+  }
+}

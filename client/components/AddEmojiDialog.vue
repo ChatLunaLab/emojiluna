@@ -4,10 +4,6 @@
             <!-- 文件上传 -->
             <el-tab-pane label="文件上传" name="upload">
                 <el-form :model="form" label-width="80px" v-loading="loading">
-                    <el-form-item :label="t('emojiluna.emojiName')" required>
-                        <el-input v-model="form.name" :placeholder="t('emojiluna.emojiName')" @input="validateForm" />
-                    </el-form-item>
-
                     <el-form-item :label="t('emojiluna.category')">
                         <el-select v-model="form.category" :placeholder="t('emojiluna.category')" style="width: 100%"
                             filterable allow-create default-first-option>
@@ -17,32 +13,29 @@
                     </el-form-item>
 
                     <el-form-item :label="t('emojiluna.tags.default')">
-                        <el-select v-model="form.tags" :placeholder="t('emojiluna.tags.default')" style="width: 100%" multiple
-                            filterable allow-create default-first-option>
+                        <el-select v-model="form.tags" :placeholder="t('emojiluna.tags.default')" style="width: 100%"
+                            multiple filterable allow-create default-first-option>
                             <el-option v-for="tag in allTags" :key="tag" :label="tag" :value="tag" />
                         </el-select>
                     </el-form-item>
 
-                    <el-form-item label="文件">
-                        <div class="upload-area" :class="{ 'drag-over': isDragOver }" @drop="handleDrop"
-                            @dragover="handleDragOver" @dragleave="handleDragLeave" @click="triggerFileInput">
-                            <div v-if="!selectedFile" class="upload-placeholder">
-                                <el-icon size="48">
-                                    <UploadFilled />
-                                </el-icon>
-                                <p>{{ t('emojiluna.dragUpload') }}</p>
-                                <el-button type="primary">选择文件</el-button>
-                            </div>
-                            <div v-else class="file-preview">
-                                <img v-if="filePreview" :src="filePreview" alt="Preview" class="preview-image" />
-                                <p>{{ selectedFile.name }}</p>
-                                <el-button @click.stop="clearFile" size="small" type="danger">
-                                    移除
-                                </el-button>
-                            </div>
-                        </div>
-                        <input ref="fileInput" type="file" accept="image/*" style="display: none"
-                            @change="handleFileSelect" />
+                    <el-form-item label="AI 分析">
+                        <el-switch v-model="form.aiAnalysis" />
+                        <el-tooltip class="box-item" effect="dark"
+                            content="开启后，将使用 AI 自动为新表情包生成更精准的名称、分类和标签。如果关闭，则使用文件名作为名称，并应用当前表单设置。" placement="top">
+                            <el-icon style="margin-left: 8px; color: var(--k-text-light);">
+                                <QuestionFilled />
+                            </el-icon>
+                        </el-tooltip>
+                    </el-form-item>
+
+                    <el-form-item label="选择文件" required>
+                        <el-upload v-model:file-list="fileList" action="#" list-type="picture-card" :auto-upload="false"
+                            multiple accept="image/*">
+                            <el-icon>
+                                <Plus />
+                            </el-icon>
+                        </el-upload>
                     </el-form-item>
                 </el-form>
             </el-tab-pane>
@@ -99,12 +92,13 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { send } from '@koishijs/client'
-import { ElMessage } from 'element-plus'
-import { UploadFilled } from '@element-plus/icons-vue'
-import type { Category } from 'koishi-plugin-emojiluna'
+import { ElMessage, type UploadUserFile } from 'element-plus'
+import { UploadFilled, Plus, QuestionFilled } from '@element-plus/icons-vue'
+import type { Category, EmojiAddOptions } from 'koishi-plugin-emojiluna'
 
 interface Props {
     modelValue: boolean
+    defaultCategory?: string
 }
 
 interface Emits {
@@ -126,16 +120,13 @@ const activeTab = ref('upload')
 const loading = ref(false)
 const categories = ref<Category[]>([])
 const allTags = ref<string[]>([])
-const isDragOver = ref(false)
-const selectedFile = ref<File | null>(null)
-const filePreview = ref<string>('')
 const urlPreview = ref(false)
-const fileInput = ref<HTMLInputElement>()
+const fileList = ref<UploadUserFile[]>([])
 
 const form = reactive({
-    name: '',
     category: '',
-    tags: [] as string[]
+    tags: [] as string[],
+    aiAnalysis: true,
 })
 
 const urlForm = reactive({
@@ -147,7 +138,7 @@ const urlForm = reactive({
 
 const canSubmit = computed(() => {
     if (activeTab.value === 'upload') {
-        return form.name.trim() && selectedFile.value
+        return fileList.value.length > 0
     } else {
         return urlForm.name.trim() && urlForm.url.trim() && urlPreview.value
     }
@@ -167,68 +158,8 @@ const loadData = async () => {
     }
 }
 
-const validateForm = () => {
-    // 可以添加表单验证逻辑
-}
-
 const validateUrlForm = () => {
     // 可以添加URL表单验证逻辑
-}
-
-const triggerFileInput = () => {
-    fileInput.value?.click()
-}
-
-const handleFileSelect = (event: Event) => {
-    const target = event.target as HTMLInputElement
-    const file = target.files?.[0]
-    if (file) {
-        setSelectedFile(file)
-    }
-}
-
-const setSelectedFile = (file: File) => {
-    selectedFile.value = file
-
-    // 生成预览
-    const reader = new FileReader()
-    reader.onload = (e) => {
-        filePreview.value = e.target?.result as string
-    }
-    reader.readAsDataURL(file)
-
-    // 自动设置名称（如果未设置）
-    if (!form.name) {
-        form.name = file.name.replace(/\.[^/.]+$/, '')
-    }
-}
-
-const clearFile = () => {
-    selectedFile.value = null
-    filePreview.value = ''
-    if (fileInput.value) {
-        fileInput.value.value = ''
-    }
-}
-
-const handleDragOver = (event: DragEvent) => {
-    event.preventDefault()
-    isDragOver.value = true
-}
-
-const handleDragLeave = (event: DragEvent) => {
-    event.preventDefault()
-    isDragOver.value = false
-}
-
-const handleDrop = (event: DragEvent) => {
-    event.preventDefault()
-    isDragOver.value = false
-
-    const files = event.dataTransfer?.files
-    if (files && files.length > 0) {
-        setSelectedFile(files[0])
-    }
 }
 
 const handleUrlChange = () => {
@@ -271,22 +202,35 @@ const handleSubmit = async () => {
 }
 
 const submitFile = async () => {
-    if (!selectedFile.value) return
+    if (fileList.value.length === 0) return
 
-    // 将文件转换为base64
-    const buffer = await selectedFile.value.arrayBuffer()
-    const uint8Array = new Uint8Array(buffer)
-    const base64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)))
+    const filesToUpload = fileList.value.map(file => {
+        return new Promise<EmojiAddOptions>((resolve, reject) => {
+            if (!file.raw) {
+                return reject(new Error('File object is missing.'))
+            }
+            const reader = new FileReader()
+            reader.readAsDataURL(file.raw)
+            reader.onload = () => {
+                const base64 = (reader.result as string).split(',')[1]
+                resolve({
+                    name: file.name.replace(/\.[^/.]+$/, ''),
+                    category: form.category || '其他',
+                    tags: form.tags,
+                    imageData: base64,
+                    //mimeType: file.raw.type,
+                })
+            }
+            reader.onerror = error => reject(error)
+        })
+    })
 
-    const emojiData = {
-        name: form.name,
-        category: form.category || '其他',
-        tags: form.tags,
-        imageData: base64,
-        mimeType: selectedFile.value.type
-    }
+    const emojisData = await Promise.all(filesToUpload)
 
-    await send('emojiluna/addEmoji', emojiData)
+    await send('emojiluna/addEmojis',
+        emojisData,
+        form.aiAnalysis,
+    )
 }
 
 const submitUrl = async () => {
@@ -308,14 +252,14 @@ const submitUrl = async () => {
 }
 
 const resetForm = () => {
-    form.name = ''
     form.category = ''
     form.tags = []
+    form.aiAnalysis = true
     urlForm.name = ''
     urlForm.category = ''
     urlForm.tags = []
     urlForm.url = ''
-    clearFile()
+    fileList.value = []
     urlPreview.value = false
     activeTab.value = 'upload'
 }
@@ -330,6 +274,11 @@ watch(
     (newValue) => {
         if (newValue) {
             loadData()
+            // 设置默认分类
+            if (props.defaultCategory) {
+                form.category = props.defaultCategory
+                urlForm.category = props.defaultCategory
+            }
         }
     }
 )
@@ -340,31 +289,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.upload-area {
-    border: 2px dashed var(--k-border-color);
-    border-radius: 8px;
-    padding: 20px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    min-height: 150px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.upload-area:hover,
-.upload-area.drag-over {
-    border-color: var(--k-color-primary);
-    background-color: var(--k-color-primary-light-9);
-}
-
-.upload-placeholder p {
-    margin: 10px 0;
-    color: var(--k-color-text-2);
-}
-
-.file-preview,
 .url-preview {
     display: flex;
     flex-direction: column;

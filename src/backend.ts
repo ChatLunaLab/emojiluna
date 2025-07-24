@@ -1,5 +1,5 @@
 import { Context } from 'koishi'
-import { Config } from '.'
+import { Config, EmojiAddOptions } from '.'
 import type {} from '@koishijs/plugin-server'
 import fs from 'fs/promises'
 import type {} from '@koishijs/plugin-console'
@@ -96,6 +96,33 @@ export async function applyBackend(ctx: Context, config: Config) {
 
             return await ctx.emojiluna.addEmoji(options, buffer)
         })
+
+        ctx.console.addListener(
+            'emojiluna/addEmojis',
+            async (emojis: EmojiAddOptions[], aiAnalysis: boolean) => {
+                if (!emojis || !Array.isArray(emojis) || emojis.length === 0) {
+                    throw new Error('表情包数据数组为必填项')
+                }
+
+                const emojisToCreate = emojis.map((emojiData) => {
+                    const { name, category, tags, imageData } = emojiData
+                    if (!imageData || !name) {
+                        throw new Error('每个表情包的图片数据和名称都是必填项')
+                    }
+                    const buffer = Buffer.from(imageData, 'base64')
+                    return {
+                        options: {
+                            name,
+                            category: category || '其他',
+                            tags: tags || []
+                        },
+                        buffer
+                    }
+                })
+
+                return await ctx.emojiluna.addEmojis(emojisToCreate, aiAnalysis)
+            }
+        )
 
         ctx.console.addListener('emojiluna/getBaseUrl', async () => {
             return ctx.server.selfUrl + config.backendPath

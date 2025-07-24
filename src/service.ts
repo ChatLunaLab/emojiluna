@@ -191,7 +191,8 @@ export class EmojiLunaService extends Service {
 
     async addEmoji(
         options: EmojiAddOptions,
-        imageData: Buffer
+        imageData: Buffer,
+        aiAnalysis: boolean = this.config.autoAnalyze
     ): Promise<EmojiItem> {
         const id = randomUUID()
         const fileName = `${id}.png`
@@ -202,23 +203,25 @@ export class EmojiLunaService extends Service {
         const filePath = path.join(storageDir, fileName)
 
         await fs.mkdir(storageDir, { recursive: true })
-
         await fs.writeFile(filePath, imageData)
 
         let finalOptions = { ...options }
-        const imageBase64 = imageData.toString('base64')
 
-        if (this.config.autoAnalyze) {
+        if (aiAnalysis) {
+            const imageBase64 = imageData.toString('base64')
             const aiResult = await this.analyzeEmoji(imageBase64)
             if (aiResult) {
                 finalOptions = {
                     name: aiResult.name || options.name,
                     category: aiResult.category || options.category || '其他',
-                    tags: [...(options.tags || []), ...aiResult.tags],
+                    tags: [
+                        ...new Set([...(options.tags || []), ...aiResult.tags])
+                    ],
                     description: aiResult.description
                 }
             }
         } else if (this.config.autoCategorize && !options.category) {
+            const imageBase64 = imageData.toString('base64')
             const categorizeResult = await this.categorizeEmoji(imageBase64)
             if (categorizeResult) {
                 finalOptions.category = categorizeResult.category
@@ -253,6 +256,31 @@ export class EmojiLunaService extends Service {
         this.ctx.logger.success(`Emoji added: ${emoji.name} (${emoji.id})`)
         this.ctx.emit('emojiluna/emoji-added', emoji)
         return emoji
+    }
+
+    async addEmojis(
+        emojis: { options: EmojiAddOptions; buffer: Buffer }[],
+        aiAnalysis: boolean
+    ): Promise<EmojiItem[]> {
+        const createdEmojis: EmojiItem[] = []
+
+        for (const { options, buffer } of emojis) {
+            try {
+                const createdEmoji = await this.addEmoji(
+                    options,
+                    buffer,
+                    aiAnalysis
+                )
+                createdEmojis.push(createdEmoji)
+            } catch (error) {
+                this.ctx.logger.error(
+                    `Failed to add emoji ${options.name}:`,
+                    error
+                )
+            }
+        }
+
+        return createdEmojis
     }
 
     async getEmojiByName(name: string): Promise<EmojiItem | null> {

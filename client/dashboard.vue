@@ -48,7 +48,17 @@
                 </span>
               </template>
               <div class="tab-content">
-                <CategoriesManager />
+                <!-- 分类详情页面 -->
+                <CategoryDetail
+                  v-if="showCategoryDetail"
+                  :category="currentCategory"
+                  @back="handleBackToCategories"
+                />
+                <!-- 分类管理页面 -->
+                <CategoriesManager
+                  v-else
+                  @category-click="handleCategoryClick"
+                />
               </div>
             </el-tab-pane>
           </el-tabs>
@@ -59,18 +69,43 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Picture, PriceTag, FolderOpened } from '@element-plus/icons-vue'
 import EmojiManager from './components/EmojiManager.vue'
 import TagsManager from './components/TagsManager.vue'
 import CategoriesManager from './components/CategoriesManager.vue'
+import CategoryDetail from './components/CategoryDetail.vue'
 import Emoji from './icons/emoji.vue'
+import type { Category } from 'koishi-plugin-emojiluna'
 
 const { t } = useI18n()
 
 // 当前活动的标签页
 const activeTab = ref('emojis')
+
+// 分类详情页面状态
+const showCategoryDetail = ref(false)
+const currentCategory = ref<Category | null>(null)
+
+// 处理分类点击事件
+const handleCategoryClick = (category: Category) => {
+  currentCategory.value = category
+  showCategoryDetail.value = true
+}
+
+// 返回分类管理页面
+const handleBackToCategories = () => {
+  showCategoryDetail.value = false
+  currentCategory.value = null
+}
+
+// 监听标签页切换，重置分类详情状态
+watch(activeTab, (newTab) => {
+  if (newTab !== 'categories') {
+    handleBackToCategories()
+  }
+})
 
 
 

@@ -88,5 +88,9 @@ declare module '@koishijs/console' {
             }
             message?: string
         }>
+        'emojiluna/addEmojis': (
+            emojis: EmojiAddOptions[],
+            aiAnalysis: boolean
+        ) => Promise<EmojiItem[]>
     }
 }

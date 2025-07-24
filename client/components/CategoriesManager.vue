@@ -98,6 +98,7 @@
           v-for="category in paginatedCategories"
           :key="category.id"
           class="category-card"
+          @click="handleCategoryClick(category)"
         >
           <div class="category-header">
             <div class="category-title">
@@ -111,14 +112,14 @@
                 size="small"
                 type="primary"
                 text
-                @click="handleEditCategory(category)"
+                @click.stop="handleEditCategory(category)"
                 :icon="Edit"
               />
               <el-button
                 size="small"
                 type="danger"
                 text
-                @click="handleDeleteCategory(category)"
+                @click.stop="handleDeleteCategory(category)"
                 :disabled="category.emojiCount > 0"
                 :icon="Delete"
               />
@@ -248,6 +249,11 @@ import {
 import type { Category, EmojiItem } from 'koishi-plugin-emojiluna'
 import type { FormInstance, FormRules } from 'element-plus'
 
+// 定义 emit 事件
+const emit = defineEmits<{
+  categoryClick: [category: Category]
+}>()
+
 // 状态管理
 const loading = ref(false)
 const saving = ref(false)
@@ -361,6 +367,11 @@ const handleSizeChange = (newSize: number) => {
 
 const handleCurrentChange = (newPage: number) => {
   currentPage.value = newPage
+}
+
+const handleCategoryClick = (category: Category) => {
+  // 触发父组件事件，用于导航到分类详情页面
+  emit('categoryClick', category)
 }
 
 const handleEditCategory = (category: Category) => {
@@ -590,10 +601,14 @@ onMounted(async () => {
   border-radius: 6px;
   padding: 20px;
   background: var(--k-card-bg);
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .category-card:hover {
   border-color: var(--k-color-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .category-header {

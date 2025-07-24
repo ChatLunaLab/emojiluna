@@ -335,11 +335,8 @@ export function applyCommands(ctx: Context, config: Config) {
                     response += `建议标签: ${result.tags.join(', ')}\n`
                     response += `描述: ${result.description}`
 
-                    if (
-                        result.newCategories &&
-                        result.newCategories.length > 0
-                    ) {
-                        response += `\n\n建议新分类: ${result.newCategories.join(', ')}`
+                    if (result.newCategory && result.newCategory.length > 0) {
+                        response += `\n\n建议新分类: ${result.newCategory}`
                     }
 
                     return response
