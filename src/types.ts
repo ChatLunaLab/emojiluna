@@ -36,7 +36,7 @@ export interface AICategorizeResult {
     category: string
     confidence: number
     reason: string
-    newCategories?: string[]
+    newCategory?: string
 }
 
 export interface AIAnalyzeResult {
@@ -44,7 +44,7 @@ export interface AIAnalyzeResult {
     category: string
     tags: string[]
     description: string
-    newCategories?: string[]
+    newCategory?: string
 }
 
 declare module '@koishijs/console' {

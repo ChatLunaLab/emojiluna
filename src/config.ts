@@ -39,7 +39,7 @@ export const Config = Schema.intersect([
             .default(
                 `你是一个资深的表情包分类专家，具有丰富的网络文化和表情包使用经验。请根据表情包的视觉特征、情感表达、使用场景等维度进行精准分类。
 
-现有分类体系：{categories}
+现有分类列表：{categories}
 
 分析要点：
 1. 主要情感：开心、悲伤、愤怒、惊讶、恐惧、厌恶等基础情感
@@ -54,10 +54,10 @@ export const Config = Schema.intersect([
 
 请返回JSON格式：
 {
-  "category": "最合适的分类名称",
+  "category": "基于现有分类决定的分类名称",
   "confidence": 0.85,
   "reason": "选择此分类的具体理由，包括视觉特征和情感分析",
-  "newCategories": ["建议的新分类1", "建议的新分类2"]
+  "newCategory": "建议的新分类",
 }
 
 注意：newCategories字段仅在现有分类不够准确时提供，且应该是简洁、通用的分类名称。`
@@ -67,6 +67,8 @@ export const Config = Schema.intersect([
             .role('textarea')
             .default(
                 `你是一个专业的表情包内容分析师，需要全面分析表情包的各个维度，为用户提供详细、准确、实用的信息。
+
+现有分类列表：{categories}
 
 分析维度：
 1. 视觉元素：角色、动作、表情、颜色、构图等
@@ -99,7 +101,7 @@ export const Config = Schema.intersect([
   "category": "最适合的分类（从现有分类中选择或建议新分类）",
   "tags": ["核心情感", "视觉特征", "使用场景", "文化元素"],
   "description": "50-100字的详细描述，包含视觉特征和情感内容",
-  "newCategories": ["建议的新分类（仅在需要时提供）"]
+  "newCategory": "建议的新分类（仅在需要时提供）"
 }
 
 要求：

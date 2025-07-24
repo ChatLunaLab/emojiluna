@@ -141,16 +141,13 @@ export class EmojiLunaService extends Service {
                 getMessageContent(result.content)
             )
 
-            if (parsedResult?.newCategories) {
-                for (const newCategory of parsedResult.newCategories.slice(
-                    0,
-                    this.config.maxNewCategories
-                )) {
-                    const exists = await this.getCategoryByName(newCategory)
-                    if (!exists) {
-                        await this.addCategory(newCategory, `AI建议的新分类`)
-                    }
+            if (parsedResult?.newCategory) {
+                const newCategory = parsedResult.newCategory
+                const exists = await this.getCategoryByName(newCategory)
+                if (!exists) {
+                    await this.addCategory(newCategory, `AI建议的新分类`)
                 }
+                parsedResult.category = newCategory
             }
 
             return parsedResult
@@ -176,16 +173,13 @@ export class EmojiLunaService extends Service {
                 getMessageContent(result.content)
             )
 
-            if (parsedResult?.newCategories) {
-                for (const newCategory of parsedResult.newCategories.slice(
-                    0,
-                    this.config.maxNewCategories
-                )) {
-                    const exists = await this.getCategoryByName(newCategory)
-                    if (!exists) {
-                        await this.addCategory(newCategory, `AI建议的新分类`)
-                    }
+            if (parsedResult?.newCategory) {
+                const newCategory = parsedResult.newCategory
+                const exists = await this.getCategoryByName(newCategory)
+                if (!exists) {
+                    await this.addCategory(newCategory, `AI建议的新分类`)
                 }
+                parsedResult.category = newCategory
             }
 
             return parsedResult
