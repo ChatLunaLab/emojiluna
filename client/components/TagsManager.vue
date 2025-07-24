@@ -135,26 +135,26 @@
               <el-icon size="14"><Picture /></el-icon>
               <span>相关表情包</span>
             </div>
-            <div class="emoji-preview-list">
-              <el-tag
-                v-for="emoji in tagInfo.emojis.slice(0, 3)"
+            <div class="emoji-preview-grid">
+              <div
+                v-for="emoji in tagInfo.emojis.slice(0, 4)"
                 :key="emoji.id"
-                size="small"
-                type="info"
-                effect="plain"
-                round
+                class="emoji-preview-item"
               >
-                {{ emoji.name }}
-              </el-tag>
-              <el-tag
-                v-if="tagInfo.emojis.length > 3"
-                size="small"
-                type="info"
-                effect="plain"
-                round
+                <img
+                  :src="`${baseUrl}/get/${emoji.name}`"
+                  :alt="emoji.name"
+                  :title="emoji.name"
+                  class="emoji-preview-img"
+                  @error="handleImageError"
+                />
+              </div>
+              <div
+                v-if="tagInfo.emojis.length > 4"
+                class="emoji-preview-more"
               >
-                +{{ tagInfo.emojis.length - 3 }}
-              </el-tag>
+                <span>+{{ tagInfo.emojis.length - 4 }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -245,6 +245,7 @@ const allEmojis = ref<EmojiItem[]>([])
 const searchKeyword = ref('')
 const currentPage = ref(1)
 const pageSize = ref(12)
+const baseUrl = ref('')
 
 // 对话框状态
 const showAddDialog = ref(false)
@@ -291,12 +292,14 @@ const paginatedTags = computed(() => {
 const loadData = async () => {
   loading.value = true
   try {
-    const [allTagsData, emojisData] = await Promise.all([
+    const [allTagsData, emojisData, baseUrlData] = await Promise.all([
       send('emojiluna/getAllTags'),
-      send('emojiluna/getEmojiList', {})
+      send('emojiluna/getEmojiList', {}),
+      send('emojiluna/getBaseUrl')
     ])
 
     allEmojis.value = emojisData || []
+    baseUrl.value = baseUrlData || '/emojiluna'
 
     // 构建标签使用统计
     const tagUsageMap = new Map<string, TagInfo>()
@@ -434,6 +437,11 @@ const handleCloseDialog = () => {
   tagFormRef.value?.resetFields()
 }
 
+const handleImageError = (event: Event) => {
+  const img = event.target as HTMLImageElement
+  img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMiAyMEM0Mi40IDIwIDQ0IDMwIDQ0IDMwQzQ0IDMwIDQyLjQgNDAgMzIgNDBDMjEuNiA0MCAyMCAzMCAyMCAzMEMyMCAzMCAyMS42IDIwIDMyIDIwWiIgZmlsbD0iI0NDQ0NDQyIvPgo8L3N2Zz4K'
+}
+
 // 监听添加对话框
 import { watch } from 'vue'
 watch(showAddDialog, (newValue) => {
@@ -459,37 +467,34 @@ onMounted(() => {
 .stats-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-bottom: 24px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .stat-card {
   border: 1px solid var(--k-card-border);
-  border-radius: 12px;
-  transition: all 0.3s ease;
+  border-radius: 6px;
   background: var(--k-card-bg);
 }
 
 .stat-card:hover {
   border-color: var(--k-color-primary);
-  box-shadow: var(--k-card-shadow);
-  transform: translateY(-2px);
 }
 
 .stat-content {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 8px;
+  gap: 12px;
+  padding: 16px;
 }
 
 .stat-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
   background: #f5f7fa;
 }
 
@@ -498,14 +503,13 @@ onMounted(() => {
 }
 
 .stat-number {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
-  color: var(--k-text-dark);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .stat-label {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--k-text-light);
 }
 
@@ -526,27 +530,21 @@ onMounted(() => {
 }
 
 .search-input {
-  border-radius: 25px;
   flex: 1;
 }
 
 .search-input :deep(.el-input__wrapper) {
-  border-radius: 25px;
   background: var(--k-hover-bg);
-  box-shadow: var(--k-card-shadow);
 }
 
 .search-button {
-  border-radius: 25px;
   padding: 12px 24px;
   font-weight: 600;
-  box-shadow: var(--k-card-shadow);
-  transition: all 0.3s ease;
   margin-left: 0;
 }
 
 .search-button:hover {
-  transform: translateY(-2px);
+  background: var(--k-hover-bg);
 }
 
 .action-buttons {
@@ -556,24 +554,17 @@ onMounted(() => {
 }
 
 .add-button {
-  border-radius: 25px;
   padding: 12px 24px;
   font-weight: 600;
-  box-shadow: var(--k-card-shadow);
-  transition: all 0.3s ease;
   color: var(--k-text-dark);
 }
 
 .add-button:hover {
-  transform: translateY(-2px);
   background: var(--k-hover-bg);
   color: var(--k-color-primary);
 }
 
 .refresh-action {
-  border-radius: 50%;
-  box-shadow: var(--k-card-shadow);
-  transition: all 0.3s ease;
 }
 
 .refresh-action:hover {
@@ -601,16 +592,13 @@ onMounted(() => {
 
 .tag-card {
   border: 1px solid var(--k-card-border);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: 6px;
+  padding: 16px;
   background: var(--k-card-bg);
-  transition: all 0.3s ease;
 }
 
 .tag-card:hover {
   border-color: var(--k-color-primary);
-  box-shadow: var(--k-card-shadow);
-  transform: translateY(-2px);
 }
 
 .tag-header {
@@ -663,6 +651,42 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.emoji-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.emoji-preview-item {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--k-border-color);
+}
+
+.emoji-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.emoji-preview-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: var(--k-color-surface-1);
+  border: 1px solid var(--k-border-color);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--k-text-light);
+  font-weight: 500;
 }
 
 .pagination-wrapper {

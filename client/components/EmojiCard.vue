@@ -81,12 +81,12 @@ const handleImageError = (event: Event) => {
 <style scoped>
 .emoji-card {
   background: var(--k-color-surface);
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
-  transition: all 0.3s ease;
   cursor: pointer;
   border: 1px solid var(--k-border-color);
   position: relative;
+  transition: all 0.3s ease;
 }
 
 .emoji-card:hover {

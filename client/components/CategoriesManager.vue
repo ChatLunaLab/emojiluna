@@ -462,37 +462,34 @@ onMounted(async () => {
 .stats-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-bottom: 24px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .stat-card {
   border: 1px solid var(--k-card-border);
-  border-radius: 12px;
-  transition: all 0.3s ease;
+  border-radius: 6px;
   background: var(--k-card-bg);
 }
 
 .stat-card:hover {
   border-color: var(--k-color-primary);
-  box-shadow: var(--k-card-shadow);
-  transform: translateY(-2px);
 }
 
 .stat-content {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 8px;
+  gap: 12px;
+  padding: 16px;
 }
 
 .stat-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
   background: var(--k-hover-bg);
 }
 
@@ -501,14 +498,14 @@ onMounted(async () => {
 }
 
 .stat-number {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
   color: var(--k-text-dark);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .stat-label {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--k-text-light);
 }
 
@@ -529,27 +526,21 @@ onMounted(async () => {
 }
 
 .search-input {
-  border-radius: 25px;
   flex: 1;
 }
 
 .search-input :deep(.el-input__wrapper) {
-  border-radius: 25px;
   background: var(--k-hover-bg);
-  box-shadow: var(--k-card-shadow);
 }
 
 .search-button {
-  border-radius: 25px;
   padding: 12px 24px;
   font-weight: 600;
-  box-shadow: var(--k-card-shadow);
-  transition: all 0.3s ease;
   margin-left: 0;
 }
 
 .search-button:hover {
-  transform: translateY(-2px);
+  background: var(--k-hover-bg);
 }
 
 .action-buttons {
@@ -559,24 +550,16 @@ onMounted(async () => {
 }
 
 .add-button {
-  border-radius: 25px;
   padding: 12px 24px;
   font-weight: 600;
-  box-shadow: var(--k-card-shadow);
-  transition: all 0.3s ease;
-  color: var(--k-text-dark);
 }
 
 .add-button:hover {
-  transform: translateY(-2px);
   background: var(--k-hover-bg);
   color: var(--k-color-primary);
 }
 
 .refresh-action {
-  border-radius: 50%;
-  box-shadow: var(--k-card-shadow);
-  transition: all 0.3s ease;
 }
 
 .refresh-action:hover {
@@ -604,16 +587,13 @@ onMounted(async () => {
 
 .category-card {
   border: 1px solid var(--k-card-border);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: 6px;
+  padding: 20px;
   background: var(--k-card-bg);
-  transition: all 0.3s ease;
 }
 
 .category-card:hover {
   border-color: var(--k-color-primary);
-  box-shadow: var(--k-card-shadow);
-  transform: translateY(-2px);
 }
 
 .category-header {
@@ -680,18 +660,18 @@ onMounted(async () => {
 
 .emoji-preview-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
-  max-width: 240px;
+  max-width: 200px;
 }
 
 .emoji-preview-item {
   position: relative;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
   overflow: hidden;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--k-border-color);
 }
 
 .emoji-preview-img {
@@ -704,13 +684,13 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  background: #f5f7fa;
-  border: 1px solid #e4e7ed;
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  background: var(--k-color-surface-1);
+  border: 1px solid var(--k-border-color);
   font-size: 12px;
-  color: #909399;
+  color: var(--k-text-light);
   font-weight: 500;
 }
 
