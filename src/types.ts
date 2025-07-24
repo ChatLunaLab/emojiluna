@@ -71,5 +71,22 @@ declare module '@koishijs/console' {
         'emojiluna/deleteCategory': (id: string) => Promise<boolean>
         'emojiluna/addEmoji': (emojiData: EmojiAddOptions) => Promise<EmojiItem>
         'emojiluna/getBaseUrl': () => Promise<string>
+        'emojiluna/analyzeEmoji': (emojiId: string) => Promise<{
+            success: boolean
+            updates?: string[]
+            result?: AIAnalyzeResult
+            oldData?: {
+                name: string
+                category: string
+                tags: string[]
+            }
+            newData?: {
+                name: string
+                category: string
+                tags: string[]
+                description: string
+            }
+            message?: string
+        }>
     }
 }

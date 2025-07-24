@@ -100,6 +100,66 @@ export async function applyBackend(ctx: Context, config: Config) {
         ctx.console.addListener('emojiluna/getBaseUrl', async () => {
             return ctx.server.selfUrl + config.backendPath
         })
+
+        ctx.console.addListener('emojiluna/analyzeEmoji', async (id) => {
+            const emoji = await ctx.emojiluna.getEmojiById(id)
+            if (!emoji) {
+                throw new Error('表情包不存在')
+            }
+
+            try {
+                const imageBuffer = await fs.readFile(emoji.path)
+                const imageBase64 = imageBuffer.toString('base64')
+                const result = await ctx.emojiluna.analyzeEmoji(imageBase64)
+
+                if (result) {
+                    // 更新表情包信息
+                    const updates = []
+                    if (result.category !== emoji.category) {
+                        await ctx.emojiluna.updateEmojiCategory(
+                            id,
+                            result.category
+                        )
+                        updates.push(
+                            `分类: ${emoji.category} → ${result.category}`
+                        )
+                    }
+                    if (
+                        JSON.stringify(result.tags.sort()) !==
+                        JSON.stringify([...emoji.tags].sort())
+                    ) {
+                        await ctx.emojiluna.updateEmojiTags(id, result.tags)
+                        updates.push(
+                            `标签: [${emoji.tags.join(', ')}] → [${result.tags.join(', ')}]`
+                        )
+                    }
+
+                    return {
+                        success: true,
+                        updates,
+                        result,
+                        oldData: {
+                            name: emoji.name,
+                            category: emoji.category,
+                            tags: emoji.tags
+                        },
+                        newData: {
+                            name: result.name,
+                            category: result.category,
+                            tags: result.tags,
+                            description: result.description
+                        }
+                    }
+                }
+
+                return {
+                    success: false,
+                    message: 'AI分析未返回结果'
+                }
+            } catch (error) {
+                throw new Error(`AI分析失败: ${error.message}`)
+            }
+        })
     })
 
     ctx.inject(['server'], (ctx) => {

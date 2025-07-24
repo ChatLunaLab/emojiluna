@@ -146,6 +146,87 @@
       :base-url="baseUrl"
       @success="handleEditSuccess"
     />
+
+    <!-- 表情包预览对话框 -->
+    <el-dialog
+      v-model="showPreviewDialog"
+      :title="previewEmoji?.name || '表情包预览'"
+      width="500px"
+      @close="handlePreviewClose"
+    >
+      <div class="preview-content">
+        <div class="preview-image-container">
+          <img
+            :src="previewEmojiUrl"
+            :alt="previewEmoji?.name"
+            class="preview-image"
+            @error="handlePreviewImageError"
+          />
+        </div>
+
+        <div class="preview-info">
+          <div class="info-item">
+            <span class="info-label">名称：</span>
+            <span class="info-value">{{ previewEmoji?.name }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">分类：</span>
+            <span class="info-value">{{ previewEmoji?.category }}</span>
+          </div>
+          <div class="info-item" v-if="previewEmoji?.tags?.length">
+            <span class="info-label">标签：</span>
+            <span class="info-value">
+              <el-tag
+                v-for="tag in previewEmoji.tags"
+                :key="tag"
+                size="small"
+                class="tag-item"
+              >
+                {{ tag }}
+              </el-tag>
+            </span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">链接：</span>
+            <el-input
+              v-model="previewEmojiLink"
+              readonly
+              size="small"
+              class="link-input"
+            >
+              <template #append>
+                <el-button @click="copyPreviewLink" :icon="copyIcon">
+                  复制
+                </el-button>
+              </template>
+            </el-input>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button type="primary" @click="copyPreviewLink">
+            <el-icon><DocumentCopy /></el-icon>
+            复制链接
+          </el-button>
+          <el-button
+            type="warning"
+            @click="handleAIAnalyze"
+            :loading="aiCategorizingId === previewEmoji?.id"
+            :disabled="aiCategorizingId !== ''"
+          >
+            <el-icon><MagicStick /></el-icon>
+            AI分析
+          </el-button>
+          <el-button @click="handlePreviewEdit">
+            <el-icon><Edit /></el-icon>
+            编辑
+          </el-button>
+          <el-button @click="handlePreviewClose">关闭</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -154,7 +235,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { send } from '@koishijs/client'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, RefreshRight } from '@element-plus/icons-vue'
+import { Search, Plus, RefreshRight, DocumentCopy, Edit, MagicStick } from '@element-plus/icons-vue'
 import EmojiCard from './EmojiCard.vue'
 import EmojiDialog from './EmojiDialog.vue'
 import AddEmojiDialog from './AddEmojiDialog.vue'
@@ -181,9 +262,24 @@ const selectedTag = ref('')
 const showAddDialog = ref(false)
 const showEditDialog = ref(false)
 const selectedEmoji = ref<EmojiItem>()
+const showPreviewDialog = ref(false)
+const previewEmoji = ref<EmojiItem>()
+const copyIcon = ref(DocumentCopy)
+const aiCategorizingId = ref<string>('')
 
 // 配置
 const baseUrl = ref('')
+
+// 预览相关计算属性
+const previewEmojiUrl = computed(() => {
+  if (!previewEmoji.value) return ''
+  return `${baseUrl.value}/get/${previewEmoji.value.name}`
+})
+
+const previewEmojiLink = computed(() => {
+  if (!previewEmoji.value) return ''
+  return `${baseUrl.value}/get/${previewEmoji.value.name}`
+})
 
 // 数据加载
 const loadEmojis = async () => {
@@ -286,14 +382,8 @@ const handleCurrentChange = (newPage: number) => {
 }
 
 const handleEmojiClick = (emoji: EmojiItem) => {
-  const link = `${baseUrl.value}/get/${emoji.name}`
-  navigator.clipboard?.writeText(link)
-    .then(() => {
-      ElMessage.success('表情包链接已复制到剪贴板')
-    })
-    .catch(() => {
-      ElMessage.info('请手动复制表情包链接')
-    })
+  previewEmoji.value = emoji
+  showPreviewDialog.value = true
 }
 
 const handleEmojiEdit = (emoji: EmojiItem) => {
@@ -330,6 +420,72 @@ const handleAddSuccess = () => {
 
 const handleEditSuccess = () => {
   refreshData()
+}
+
+// 预览对话框相关处理
+const handlePreviewClose = () => {
+  showPreviewDialog.value = false
+  previewEmoji.value = undefined
+}
+
+const handlePreviewImageError = (event: Event) => {
+  const img = event.target as HTMLImageElement
+  img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMiAyMEM0Mi40IDIwIDQ0IDMwIDQ0IDMwQzQ0IDMwIDQyLjQgNDAgMzIgNDBDMjEuNiA0MCAyMCAzMCAyMCAzMEMyMCAzMCAyMS42IDIwIDMyIDIwWiIgZmlsbD0iI0NDQ0NDQyIvPgo8L3N2Zz4K'
+}
+
+const copyPreviewLink = async () => {
+  if (!previewEmojiLink.value) return
+
+  try {
+    await navigator.clipboard.writeText(previewEmojiLink.value)
+    ElMessage.success('链接已复制到剪贴板')
+  } catch (error) {
+    ElMessage.info('请手动复制链接')
+  }
+}
+
+const handlePreviewEdit = () => {
+  if (previewEmoji.value) {
+    selectedEmoji.value = previewEmoji.value
+    showEditDialog.value = true
+    showPreviewDialog.value = false
+  }
+}
+
+const handleAIAnalyze = async () => {
+  if (!previewEmoji.value) return
+
+  aiCategorizingId.value = previewEmoji.value.id
+
+  try {
+    const result = await send('emojiluna/analyzeEmoji', previewEmoji.value.id)
+
+    if (result.success) {
+      const { updates, newData } = result
+
+      if (updates.length > 0) {
+        ElMessage.success(`AI分析完成，已更新：${updates.join(', ')}`)
+
+        // 更新局部状态
+        if (previewEmoji.value) {
+          previewEmoji.value.category = newData.category
+          previewEmoji.value.tags = newData.tags
+        }
+
+        // 刷新数据
+        await refreshData()
+      } else {
+        ElMessage.info('没有检测到需要更新的内容')
+      }
+    } else {
+      ElMessage.info(result.message || 'AI分析未返回结果')
+    }
+  } catch (error) {
+    console.error('AI分析失败:', error)
+    ElMessage.error(`AI分析失败: ${error.message || error}`)
+  } finally {
+    aiCategorizingId.value = ''
+  }
 }
 
 // 初始化
@@ -481,6 +637,69 @@ onMounted(refreshData)
   display: flex;
   justify-content: center;
   padding: 20px;
+}
+
+/* 预览对话框样式 */
+.preview-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.preview-image-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  background: var(--k-color-surface-1);
+  border-radius: 12px;
+  border: 1px solid var(--k-border-color);
+}
+
+.preview-image {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.preview-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.info-label {
+  font-weight: 600;
+  color: var(--k-text-normal);
+  min-width: 50px;
+  flex-shrink: 0;
+}
+
+.info-value {
+  flex: 1;
+  color: var(--k-text-light);
+}
+
+.tag-item {
+  margin-right: 6px;
+  margin-bottom: 4px;
+}
+
+.link-input {
+  flex: 1;
+}
+
+.dialog-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 /* 响应式设计 */
