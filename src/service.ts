@@ -313,7 +313,7 @@ export class EmojiLunaService extends Service {
     }
 
     async getEmojiList(options: EmojiSearchOptions = {}): Promise<EmojiItem[]> {
-        const { category, tags, limit = 20, offset = 0 } = options
+        const { category, tags, limit = undefined, offset = 0 } = options
         let emojis = Object.values(this._emojiStorage)
 
         if (category) {
@@ -324,6 +324,10 @@ export class EmojiLunaService extends Service {
             emojis = emojis.filter((emoji) =>
                 tags.some((tag) => emoji.tags.includes(tag))
             )
+        }
+
+        if (!limit) {
+            return emojis
         }
 
         return emojis.slice(offset, offset + limit)
