@@ -7,6 +7,7 @@ export const Config = Schema.intersect([
             .min(10)
             .max(1000)
             .default(100),
+        selfUrl: Schema.string().description('服务器地址').default(''),
         storagePath: Schema.path({
             filters: ['directory']
         })
@@ -175,6 +176,7 @@ export interface Config {
     autoAnalyze: boolean
     autoCollect: boolean
     model: string
+    selfUrl: string
     categorizePrompt: string
     analyzePrompt: string
     maxNewCategories: number

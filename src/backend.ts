@@ -125,7 +125,8 @@ export async function applyBackend(ctx: Context, config: Config) {
         )
 
         ctx.console.addListener('emojiluna/getBaseUrl', async () => {
-            return ctx.server.selfUrl + config.backendPath
+            const selfUrl = config.selfUrl || ctx.server.selfUrl
+            return selfUrl + config.backendPath
         })
 
         ctx.console.addListener('emojiluna/analyzeEmoji', async (id) => {

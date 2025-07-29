@@ -183,11 +183,7 @@ export class AutoCollector {
     private shouldProcessMessage(session: Session): boolean {
         if (session.isDirect) return false
 
-        if (this.options.whitelistGroups.length > 0) {
-            return this.options.whitelistGroups.includes(session.guildId)
-        }
-
-        return true
+        return this.options.whitelistGroups.includes(session.guildId)
     }
 
     private async processImage(imageElement: h, session: Session) {
