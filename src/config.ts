@@ -152,6 +152,13 @@ export const Config = Schema.intersect([
             .description('表情包获取群白名单')
             .role('table')
             .default([]),
+        emojiFrequencyThreshold: Schema.number()
+            .description(
+                '表情包在10分钟内发送次数阈值（达到此次数才视为有效表情包）'
+            )
+            .min(1)
+            .max(20)
+            .default(3),
         groupAutoCollectLimit: Schema.dict(
             Schema.object({
                 hourLimit: Schema.number()
@@ -184,6 +191,7 @@ export interface Config {
     maxEmojiSize: number
     similarityThreshold: number
     whitelistGroups: string[]
+    emojiFrequencyThreshold: number
     injectVariables: boolean
     backendServer: boolean
     backendPath: string

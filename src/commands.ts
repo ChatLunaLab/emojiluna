@@ -23,7 +23,7 @@ export function applyCommands(ctx: Context, config: Config) {
                 return h.image(`data:${mimeType};base64,${base64}`)
             })
         })
-        ctx.command('emojiluna <name:string>', '表情包管理').action(
+        ctx.command('emojiluna.get <name:string>', '表情包管理').action(
             async ({ session }, name) => {
                 if (!name) return '请输入表情包名称'
                 const emoji = await emojiluna.getEmojiByName(name)
@@ -144,24 +144,6 @@ export function applyCommands(ctx: Context, config: Config) {
                 ).then((list) => list.join('\n\n'))
 
                 return h.parse(`搜索结果 (${emojis.length} 个):\n\n${list}`)
-            }
-        )
-
-        ctx.command('emojiluna.get <id:string>', '获取表情包').action(
-            async ({ session }, id) => {
-                if (!id) return '请输入表情包ID'
-
-                const emoji = await emojiluna.getEmojiById(id)
-                if (!emoji) {
-                    return '表情包不存在'
-                }
-
-                try {
-                    const imageBuffer = await fs.readFile(emoji.path)
-                    return h.image(imageBuffer, getImageType(imageBuffer))
-                } catch (error) {
-                    return '读取表情包文件失败'
-                }
             }
         )
 

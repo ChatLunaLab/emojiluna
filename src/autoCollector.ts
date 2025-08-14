@@ -8,6 +8,7 @@ export interface AutoCollectOptions {
     maxSize: number
     similarityThreshold: number
     whitelistGroups: string[]
+    emojiFrequencyThreshold: number
     groupAutoCollectLimit: Record<
         string,
         { hourLimit: number; dayLimit: number }
@@ -28,13 +29,21 @@ export interface ImageFeatures {
     dimensions: { width: number; height: number }
 }
 
+export interface FrequencyRecord {
+    hash: string
+    timestamps: number[]
+    groupId: string
+}
+
 export class AutoCollector {
     private ctx: Context
     private config: Config
     private options: AutoCollectOptions
     private emojiHashes = new Set<string>()
     private imageFeatures = new Map<string, ImageFeatures>()
+    private frequencyTracker = new Map<string, FrequencyRecord>()
     private static readonly MAX_HASHES = 10000
+    private static readonly FREQUENCY_WINDOW = 10 * 60 * 1000 // 10 minutes in milliseconds
     private groupAutoCollectLimit: Record<
         string,
         {
@@ -53,6 +62,7 @@ export class AutoCollector {
             maxSize: config.maxEmojiSize,
             similarityThreshold: config.similarityThreshold,
             whitelistGroups: config.whitelistGroups,
+            emojiFrequencyThreshold: config.emojiFrequencyThreshold,
             groupAutoCollectLimit: config.groupAutoCollectLimit
         }
         this.loadExistingHashes()
@@ -142,8 +152,10 @@ export class AutoCollector {
                 status += `最小大小: ${stats.options.minSize}KB\n`
                 status += `最大大小: ${stats.options.maxSize}MB\n`
                 status += `相似度阈值: ${stats.options.similarityThreshold}\n`
+                status += `频次阈值: ${stats.options.emojiFrequencyThreshold}次/10分钟\n`
                 status += `白名单群数: ${stats.options.whitelistGroups.length}\n`
-                status += `已记录哈希数: ${stats.totalHashes}`
+                status += `已记录哈希数: ${stats.totalHashes}\n`
+                status += `频率记录数: ${stats.frequencyRecords}`
 
                 if (stats.options.whitelistGroups.length > 0) {
                     status += `\n\n白名单群:\n${stats.options.whitelistGroups.join('\n')}`
@@ -186,10 +198,64 @@ export class AutoCollector {
         return this.options.whitelistGroups.includes(session.guildId)
     }
 
+    private trackImageFrequency(hash: string, groupId: string): number {
+        const currentTime = Date.now()
+        const key = `${hash}_${groupId}`
+
+        if (!this.frequencyTracker.has(key)) {
+            this.frequencyTracker.set(key, {
+                hash,
+                timestamps: [],
+                groupId
+            })
+        }
+
+        const record = this.frequencyTracker.get(key)!
+
+        // Clean old timestamps outside the 10-minute window
+        record.timestamps = record.timestamps.filter(
+            (timestamp) =>
+                currentTime - timestamp <= AutoCollector.FREQUENCY_WINDOW
+        )
+
+        // Add current timestamp
+        record.timestamps.push(currentTime)
+
+        return record.timestamps.length
+    }
+
+    private cleanupFrequencyTracker() {
+        const currentTime = Date.now()
+
+        for (const [key, record] of this.frequencyTracker.entries()) {
+            // Clean old timestamps
+            record.timestamps = record.timestamps.filter(
+                (timestamp) =>
+                    currentTime - timestamp <= AutoCollector.FREQUENCY_WINDOW
+            )
+
+            // Remove records with no recent timestamps
+            if (record.timestamps.length === 0) {
+                this.frequencyTracker.delete(key)
+            }
+        }
+    }
+
     private async processImage(imageElement: h, session: Session) {
         try {
             const imageInfo = await this.getImageInfo(imageElement)
             if (!imageInfo || !this.checkFileSize(imageInfo.size)) return
+
+            // First check if we should collect based on frequency
+            const groupId = session.guildId || session.channelId
+            const frequency = this.trackImageFrequency(imageInfo.hash, groupId)
+
+            if (frequency < this.options.emojiFrequencyThreshold) {
+                this.ctx.logger.debug(
+                    `Image frequency too low: ${frequency}/${this.options.emojiFrequencyThreshold}`
+                )
+                return
+            }
 
             if (this.emojiHashes.has(imageInfo.hash)) {
                 this.ctx.logger.debug('Duplicate image detected, skipping')
@@ -202,6 +268,12 @@ export class AutoCollector {
             }
 
             await this.saveEmoji(imageInfo, session)
+
+            // Clean up old frequency records periodically
+            if (Math.random() < 0.1) {
+                // 10% chance to cleanup
+                this.cleanupFrequencyTracker()
+            }
         } catch (error) {
             this.ctx.logger.warn(`Failed to process image: ${error.message}`)
         }
@@ -601,6 +673,7 @@ export class AutoCollector {
             maxSize: config.maxEmojiSize,
             similarityThreshold: config.similarityThreshold,
             whitelistGroups: config.whitelistGroups,
+            emojiFrequencyThreshold: config.emojiFrequencyThreshold,
             groupAutoCollectLimit: config.groupAutoCollectLimit
         }
     }
@@ -608,6 +681,7 @@ export class AutoCollector {
     public getStats() {
         return {
             totalHashes: this.emojiHashes.size,
+            frequencyRecords: this.frequencyTracker.size,
             isEnabled: this.config.autoCollect,
             options: this.options
         }
