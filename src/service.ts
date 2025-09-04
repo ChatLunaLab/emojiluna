@@ -8,7 +8,13 @@ import {
     EmojiItem,
     EmojiSearchOptions
 } from './types'
-import { chunkArray, generateId } from './utils'
+import {
+    chunkArray,
+    extractors,
+    generateId,
+    ParseResult,
+    tryParse
+} from './utils'
 import path from 'path'
 import fs from 'fs/promises'
 import { randomUUID } from 'crypto'
@@ -16,43 +22,6 @@ import { parseRawModelName } from 'koishi-plugin-chatluna/llm-core/utils/count_t
 import { ChatLunaChatModel } from 'koishi-plugin-chatluna/llm-core/platform/model'
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { getMessageContent } from 'koishi-plugin-chatluna/utils/string'
-
-type ParseResult<T> = T | null
-
-const tryParse = <T>(text: string): ParseResult<T> => {
-    try {
-        return JSON.parse(text.trim())
-    } catch {
-        return null
-    }
-}
-
-const extractors = [
-    (text: string) => text.trim(),
-    (text: string) =>
-        text.replace(/```(?:json|JSON)?\s*/g, '').replace(/```\s*$/g, ''),
-    (text: string) => {
-        const start = text.indexOf('{'),
-            end = text.lastIndexOf('}')
-        return start !== -1 && end !== -1 && start < end
-            ? text.substring(start, end + 1)
-            : text
-    },
-    (text: string) => {
-        const start = text.indexOf('{')
-        if (start === -1) return text
-        let count = 0,
-            end = -1
-        for (let i = start; i < text.length; i++) {
-            if (text[i] === '{') count++
-            else if (text[i] === '}' && --count === 0) {
-                end = i
-                break
-            }
-        }
-        return end !== -1 ? text.substring(start, end + 1) : text
-    }
-]
 
 export class EmojiLunaService extends Service {
     private _emojiStorage: Record<string, EmojiItem> = {}

@@ -1,5 +1,42 @@
 import { h, Session } from 'koishi'
 
+export type ParseResult<T> = T | null
+
+export const tryParse = <T>(text: string): ParseResult<T> => {
+    try {
+        return JSON.parse(text.trim())
+    } catch {
+        return null
+    }
+}
+
+export const extractors = [
+    (text: string) => text.trim(),
+    (text: string) =>
+        text.replace(/```(?:json|JSON)?\s*/g, '').replace(/```\s*$/g, ''),
+    (text: string) => {
+        const start = text.indexOf('{'),
+            end = text.lastIndexOf('}')
+        return start !== -1 && end !== -1 && start < end
+            ? text.substring(start, end + 1)
+            : text
+    },
+    (text: string) => {
+        const start = text.indexOf('{')
+        if (start === -1) return text
+        let count = 0,
+            end = -1
+        for (let i = start; i < text.length; i++) {
+            if (text[i] === '{') count++
+            else if (text[i] === '}' && --count === 0) {
+                end = i
+                break
+            }
+        }
+        return end !== -1 ? text.substring(start, end + 1) : text
+    }
+]
+
 export async function handleImageUpload<T>(
     session: Session,
     content: string,

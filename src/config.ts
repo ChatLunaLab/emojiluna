@@ -111,12 +111,7 @@ export const Config = Schema.intersect([
 - 描述要生动具体，帮助用户理解表情包内涵
 - 名称要简洁易记，体现表情包特点`
             )
-            .description('表情包信息解析提示词'),
-        maxNewCategories: Schema.number()
-            .min(1)
-            .max(3)
-            .default(2)
-            .description('最多建议新分类数量')
+            .description('表情包信息解析提示词')
     }).description('AI功能配置'),
 
     Schema.object({

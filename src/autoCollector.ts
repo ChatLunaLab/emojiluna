@@ -67,6 +67,8 @@ export class AutoCollector {
         }
         this.loadExistingHashes()
         this.registerCommands()
+
+        ctx.setTimeout(() => this.cleanupFrequencyTracker(), 30 * 60 * 1000)
     }
 
     private async loadExistingHashes() {
@@ -244,7 +246,9 @@ export class AutoCollector {
     private async processImage(imageElement: h, session: Session) {
         try {
             const imageInfo = await this.getImageInfo(imageElement)
-            if (!imageInfo || !this.checkFileSize(imageInfo.size)) return
+            if (!imageInfo || !this.checkFileSize(imageInfo.size)) {
+                return
+            }
 
             // First check if we should collect based on frequency
             const groupId = session.guildId || session.channelId
@@ -268,12 +272,6 @@ export class AutoCollector {
             }
 
             await this.saveEmoji(imageInfo, session)
-
-            // Clean up old frequency records periodically
-            if (Math.random() < 0.1) {
-                // 10% chance to cleanup
-                this.cleanupFrequencyTracker()
-            }
         } catch (error) {
             this.ctx.logger.warn(`Failed to process image: ${error.message}`)
         }
