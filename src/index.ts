@@ -1,11 +1,10 @@
-import { Context, Schema } from 'koishi'
+import { Context } from 'koishi'
 import { Config } from './config'
 import { EmojiLunaService } from './service'
 import { applyCommands } from './commands'
 import { AutoCollector } from './autoCollector'
-import { PlatformService } from 'koishi-plugin-chatluna/llm-core/platform/service'
-import { ModelType } from 'koishi-plugin-chatluna/llm-core/platform/types'
 import { applyBackend } from './backend'
+import { modelSchema } from 'koishi-plugin-chatluna/utils/schema'
 
 export function apply(ctx: Context, config: Config) {
     ctx.plugin(EmojiLunaService, config)
@@ -20,16 +19,7 @@ export function apply(ctx: Context, config: Config) {
             autoCollector.start()
         })
 
-        const getModelNames = (service: PlatformService) =>
-            service.getAllModels(ModelType.llm).map((m) => Schema.const(m))
-
-        const updateSchema = (service: PlatformService) => {
-            ctx.schema.set('model', Schema.union(getModelNames(service)))
-        }
-
-        ctx.on('chatluna/model-added', updateSchema)
-        ctx.on('chatluna/model-removed', updateSchema)
-        ctx.on('ready', () => updateSchema(ctx.chatluna.platform))
+        modelSchema(ctx)
     })
 }
 

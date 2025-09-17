@@ -22,11 +22,12 @@ import { parseRawModelName } from 'koishi-plugin-chatluna/llm-core/utils/count_t
 import { ChatLunaChatModel } from 'koishi-plugin-chatluna/llm-core/platform/model'
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { getMessageContent } from 'koishi-plugin-chatluna/utils/string'
+import { ComputedRef } from 'koishi-plugin-chatluna'
 
 export class EmojiLunaService extends Service {
     private _emojiStorage: Record<string, EmojiItem> = {}
     private _categories: Record<string, Category> = {}
-    private _model: ChatLunaChatModel | null = null
+    private _model: ComputedRef<ChatLunaChatModel> | null = null
 
     constructor(
         ctx: Context,
@@ -66,11 +67,10 @@ export class EmojiLunaService extends Service {
         if (!this.config.autoCategorize && !this.config.autoAnalyze) return
 
         try {
-            const [platform, modelName] = parseRawModelName(this.config.model)
+            const [platform] = parseRawModelName(this.config.model)
             await this.ctx.chatluna.awaitLoadPlatform(platform)
             this._model = await this.ctx.chatluna.createChatModel(
-                platform,
-                modelName
+                this.config.model
             )
             this.ctx.logger.success('AI模型加载成功')
         } catch (error) {
@@ -91,14 +91,14 @@ export class EmojiLunaService extends Service {
     async categorizeEmoji(
         imageBase64: string
     ): Promise<AICategorizeResult | null> {
-        if (!this._model || !this.config.autoCategorize) return null
+        if (!this._model?.value || !this.config.autoCategorize) return null
 
         try {
             const prompt = this.config.categorizePrompt.replace(
                 '{categories}',
                 this.config.categories.join(', ')
             )
-            const result = await this._model.invoke([
+            const result = await this._model.value.invoke([
                 new SystemMessage(prompt),
                 new HumanMessage({
                     content: '请分析这个表情包',
@@ -127,10 +127,10 @@ export class EmojiLunaService extends Service {
     }
 
     async analyzeEmoji(imageBase64: string): Promise<AIAnalyzeResult | null> {
-        if (!this._model || !this.config.autoAnalyze) return null
+        if (!this._model?.value || !this.config.autoAnalyze) return null
 
         try {
-            const result = await this._model.invoke([
+            const result = await this._model.value.invoke([
                 new SystemMessage(this.config.analyzePrompt),
                 new HumanMessage({
                     content: '请分析这个表情包',
