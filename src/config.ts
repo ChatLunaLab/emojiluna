@@ -1,5 +1,9 @@
 import { Schema } from 'koishi'
-import { DEFAULT_ACCEPTED_IMAGE_TYPES, IMAGE_CONTENT_TYPES, ImageContentType } from './types'
+import {
+    DEFAULT_ACCEPTED_IMAGE_TYPES,
+    IMAGE_CONTENT_TYPES,
+    ImageContentType
+} from './types'
 
 export const Config = Schema.intersect([
     Schema.object({
@@ -136,7 +140,7 @@ export const Config = Schema.intersect([
         maxEmojiSize: Schema.number()
             .description('单个表情包最大大小(MB)')
             .min(1)
-            .max(2)
+            .max(8)
             .default(2),
         similarityThreshold: Schema.number()
             .description('表情包相似度阈值(0-1)')
