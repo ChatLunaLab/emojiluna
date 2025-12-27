@@ -52,8 +52,18 @@
             circle
             @click="showAddDialog = true"
             v-if="!isSelectionMode"
+            :title="t('emojiluna.addEmoji')"
           >
             <el-icon><Plus /></el-icon>
+          </el-button>
+
+          <el-button
+            circle
+            @click="showFolderImportDialog = true"
+            v-if="!isSelectionMode"
+            :title="t('emojiluna.folderImport.title')"
+          >
+            <el-icon><FolderAdd /></el-icon>
           </el-button>
         </div>
       </div>
@@ -149,6 +159,11 @@
       :emoji="selectedEmoji"
       :base-url="baseUrl"
       @success="handleEditSuccess"
+    />
+
+    <FolderImportDialog
+      v-model="showFolderImportDialog"
+      @success="handleFolderImportSuccess"
     />
 
     <!-- Move to Category Dialog -->
@@ -276,10 +291,11 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { send } from '@koishijs/client'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, RefreshRight, DocumentCopy, Edit, MagicStick, Filter, Delete, FolderOpened, Check, Close } from '@element-plus/icons-vue'
+import { Search, Plus, RefreshRight, DocumentCopy, Edit, MagicStick, Filter, Delete, FolderOpened, Check, Close, FolderAdd } from '@element-plus/icons-vue'
 import EmojiCard from './EmojiCard.vue'
 import EmojiDialog from './EmojiDialog.vue'
 import AddEmojiDialog from './AddEmojiDialog.vue'
+import FolderImportDialog from './FolderImportDialog.vue'
 import type { EmojiItem, Category, EmojiSearchOptions } from 'koishi-plugin-emojiluna'
 
 const { t } = useI18n()
@@ -302,6 +318,7 @@ const selectedTag = ref('')
 // UI State
 const showAddDialog = ref(false)
 const showEditDialog = ref(false)
+const showFolderImportDialog = ref(false)
 const selectedEmoji = ref<EmojiItem>()
 const showPreviewDialog = ref(false)
 const previewEmoji = ref<EmojiItem>()
@@ -566,6 +583,10 @@ const handleAddSuccess = () => {
 }
 
 const handleEditSuccess = () => {
+  refreshData()
+}
+
+const handleFolderImportSuccess = () => {
   refreshData()
 }
 

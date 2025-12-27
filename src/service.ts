@@ -3,10 +3,16 @@ import { Config } from './config'
 import {
     AIAnalyzeResult,
     AICategorizeResult,
+    AIImageFilterResult,
     Category,
     EmojiAddOptions,
     EmojiItem,
-    EmojiSearchOptions
+    EmojiSearchOptions,
+    FolderImportOptions,
+    FolderImportResult,
+    FolderScanResult,
+    ImageContentType,
+    ScannedFile
 } from './types'
 import {
     chunkArray,
@@ -15,6 +21,7 @@ import {
     ParseResult,
     tryParse
 } from './utils'
+import { extractSampledFrames } from './imageProcessor'
 import path from 'path'
 import fs from 'fs/promises'
 import { randomUUID } from 'crypto'
@@ -25,6 +32,7 @@ import { getMessageContent } from 'koishi-plugin-chatluna/utils/string'
 import { ComputedRef } from 'koishi-plugin-chatluna'
 
 export class EmojiLunaService extends Service {
+    private static readonly AI_FRAME_SAMPLES = 3
     private _emojiStorage: Record<string, EmojiItem> = {}
     private _categories: Record<string, Category> = {}
     private _model: ComputedRef<ChatLunaChatModel> | null = null
@@ -88,6 +96,28 @@ export class EmojiLunaService extends Service {
         return null
     }
 
+    private async buildAiImages(imageBase64: string): Promise<string[]> {
+        try {
+            const buffer = Buffer.from(imageBase64, 'base64')
+            const { frames, metadata } = await extractSampledFrames(
+                buffer,
+                EmojiLunaService.AI_FRAME_SAMPLES,
+                'png'
+            )
+
+            if (frames.length === 0 || metadata.frameCount <= 1) {
+                return [imageBase64]
+            }
+
+            return frames.map((frame) => frame.toString('base64'))
+        } catch (error) {
+            this.ctx.logger.warn(
+                `AI image preparation failed: ${error.message}`
+            )
+            return [imageBase64]
+        }
+    }
+
     async categorizeEmoji(
         imageBase64: string
     ): Promise<AICategorizeResult | null> {
@@ -98,11 +128,12 @@ export class EmojiLunaService extends Service {
                 '{categories}',
                 this.config.categories.join(', ')
             )
+            const images = await this.buildAiImages(imageBase64)
             const result = await this._model.value.invoke([
                 new SystemMessage(prompt),
                 new HumanMessage({
                     content: '请分析这个表情包',
-                    additional_kwargs: { images: [imageBase64] }
+                    additional_kwargs: { images }
                 })
             ])
 
@@ -130,11 +161,12 @@ export class EmojiLunaService extends Service {
         if (!this._model?.value || !this.config.autoAnalyze) return null
 
         try {
+            const images = await this.buildAiImages(imageBase64)
             const result = await this._model.value.invoke([
                 new SystemMessage(this.config.analyzePrompt),
                 new HumanMessage({
                     content: '请分析这个表情包',
-                    additional_kwargs: { images: [imageBase64] }
+                    additional_kwargs: { images }
                 })
             ])
 
@@ -154,6 +186,51 @@ export class EmojiLunaService extends Service {
             return parsedResult
         } catch (error) {
             this.ctx.logger.error('AI分析失败:', error)
+            return null
+        }
+    }
+
+    async filterImageByType(
+        imageBase64: string
+    ): Promise<AIImageFilterResult | null> {
+        if (!this._model?.value || !this.config.enableImageTypeFilter) {
+            return null
+        }
+
+        try {
+            const images = await this.buildAiImages(imageBase64)
+            const result = await this._model.value.invoke([
+                new SystemMessage(this.config.imageFilterPrompt),
+                new HumanMessage({
+                    content: '请分析这张图片的类型',
+                    additional_kwargs: { images }
+                })
+            ])
+
+            const parsedResult = this.parseAIResult<{
+                imageType: ImageContentType
+                confidence: number
+                reason: string
+                isUseful: boolean
+            }>(getMessageContent(result.content))
+
+            if (!parsedResult) {
+                return null
+            }
+
+            const acceptedTypes = this.config.acceptedImageTypes
+            const isAcceptable =
+                parsedResult.isUseful &&
+                acceptedTypes.includes(parsedResult.imageType)
+
+            return {
+                imageType: parsedResult.imageType,
+                isAcceptable,
+                confidence: parsedResult.confidence,
+                reason: parsedResult.reason
+            }
+        } catch (error) {
+            this.ctx.logger.error('AI图片类型过滤失败:', error)
             return null
         }
     }
@@ -514,6 +591,238 @@ export class EmojiLunaService extends Service {
 
     getCategoryCount(): number {
         return Object.keys(this._categories).length
+    }
+
+    // Supported image extensions for folder import
+    private static readonly SUPPORTED_EXTENSIONS = [
+        '.png',
+        '.jpg',
+        '.jpeg',
+        '.gif',
+        '.webp'
+    ]
+
+    /**
+     * Scan a folder and return information about its contents
+     */
+    async scanFolder(folderPath: string): Promise<FolderScanResult> {
+        const files: ScannedFile[] = []
+        const subfolders: string[] = []
+
+        try {
+            await fs.access(folderPath)
+        } catch {
+            throw new Error(`文件夹不存在或无法访问: ${folderPath}`)
+        }
+
+        const entries = await fs.readdir(folderPath, { withFileTypes: true })
+
+        for (const entry of entries) {
+            const entryPath = path.join(folderPath, entry.name)
+
+            if (entry.isDirectory()) {
+                subfolders.push(entry.name)
+            } else if (entry.isFile()) {
+                const ext = path.extname(entry.name).toLowerCase()
+                if (
+                    EmojiLunaService.SUPPORTED_EXTENSIONS.includes(ext)
+                ) {
+                    const stat = await fs.stat(entryPath)
+                    files.push({
+                        path: entryPath,
+                        name: path.basename(entry.name, ext),
+                        category: path.basename(folderPath),
+                        size: stat.size
+                    })
+                }
+            }
+        }
+
+        return {
+            folderPath,
+            files,
+            subfolders,
+            totalFiles: files.length
+        }
+    }
+
+    /**
+     * Recursively scan a folder and collect all image files
+     */
+    private async scanFolderRecursive(
+        folderPath: string,
+        useSubfoldersAsCategories: boolean,
+        defaultCategory: string,
+        basePath?: string
+    ): Promise<ScannedFile[]> {
+        const files: ScannedFile[] = []
+        const actualBasePath = basePath || folderPath
+
+        try {
+            await fs.access(folderPath)
+        } catch {
+            this.ctx.logger.warn(`文件夹不存在或无法访问: ${folderPath}`)
+            return files
+        }
+
+        const entries = await fs.readdir(folderPath, { withFileTypes: true })
+
+        for (const entry of entries) {
+            const entryPath = path.join(folderPath, entry.name)
+
+            if (entry.isDirectory()) {
+                // Recursively scan subdirectory
+                const subfolderCategory = useSubfoldersAsCategories
+                    ? entry.name
+                    : defaultCategory
+                const subFiles = await this.scanFolderRecursive(
+                    entryPath,
+                    false, // Don't nest categories further
+                    subfolderCategory,
+                    actualBasePath
+                )
+                files.push(...subFiles)
+            } else if (entry.isFile()) {
+                const ext = path.extname(entry.name).toLowerCase()
+                if (
+                    EmojiLunaService.SUPPORTED_EXTENSIONS.includes(ext)
+                ) {
+                    const stat = await fs.stat(entryPath)
+
+                    // Determine category based on folder structure
+                    let category = defaultCategory
+                    if (useSubfoldersAsCategories && folderPath !== actualBasePath) {
+                        // Get the immediate parent folder name as category
+                        category = path.basename(folderPath)
+                    }
+
+                    files.push({
+                        path: entryPath,
+                        name: path.basename(entry.name, ext),
+                        category,
+                        size: stat.size
+                    })
+                }
+            }
+        }
+
+        return files
+    }
+
+    /**
+     * Check if an emoji with the same name already exists
+     */
+    private emojiNameExists(name: string): boolean {
+        return Object.values(this._emojiStorage).some(
+            (emoji) => emoji.name === name
+        )
+    }
+
+    /**
+     * Import emojis from a local folder
+     */
+    async importFromFolder(
+        options: FolderImportOptions
+    ): Promise<FolderImportResult> {
+        const {
+            folderPath,
+            useSubfoldersAsCategories,
+            defaultCategory = '其他',
+            recursive,
+            aiAnalysis,
+            skipExisting
+        } = options
+
+        const result: FolderImportResult = {
+            success: true,
+            imported: 0,
+            skipped: 0,
+            failed: 0,
+            errors: [],
+            importedEmojis: []
+        }
+
+        try {
+            // Scan the folder
+            let files: ScannedFile[]
+            if (recursive) {
+                files = await this.scanFolderRecursive(
+                    folderPath,
+                    useSubfoldersAsCategories,
+                    defaultCategory
+                )
+            } else {
+                const scanResult = await this.scanFolder(folderPath)
+                files = scanResult.files.map((f) => ({
+                    ...f,
+                    category: useSubfoldersAsCategories
+                        ? f.category
+                        : defaultCategory
+                }))
+            }
+
+            if (files.length === 0) {
+                result.errors.push('未找到支持的图片文件')
+                return result
+            }
+
+            this.ctx.logger.info(
+                `开始导入 ${files.length} 个表情包从 ${folderPath}`
+            )
+
+            // Ensure categories exist
+            const categoryNames = [...new Set(files.map((f) => f.category))]
+            for (const categoryName of categoryNames) {
+                const exists = await this.getCategoryByName(categoryName)
+                if (!exists) {
+                    await this.addCategory(categoryName, `从文件夹导入: ${folderPath}`)
+                }
+            }
+
+            // Import files
+            for (const file of files) {
+                try {
+                    // Check for existing emoji with same name
+                    if (skipExisting && this.emojiNameExists(file.name)) {
+                        result.skipped++
+                        continue
+                    }
+
+                    // Read the file
+                    const imageBuffer = await fs.readFile(file.path)
+
+                    // Add the emoji
+                    const emoji = await this.addEmoji(
+                        {
+                            name: file.name,
+                            category: file.category,
+                            tags: []
+                        },
+                        imageBuffer,
+                        aiAnalysis
+                    )
+
+                    result.imported++
+                    result.importedEmojis.push(emoji)
+                } catch (error) {
+                    result.failed++
+                    result.errors.push(
+                        `导入 ${file.name} 失败: ${error.message}`
+                    )
+                    this.ctx.logger.error(`导入失败 ${file.path}:`, error)
+                }
+            }
+
+            this.ctx.logger.success(
+                `文件夹导入完成: 成功 ${result.imported}, 跳过 ${result.skipped}, 失败 ${result.failed}`
+            )
+        } catch (error) {
+            result.success = false
+            result.errors.push(`导入失败: ${error.message}`)
+            this.ctx.logger.error('文件夹导入失败:', error)
+        }
+
+        return result
     }
 
     private async updateCategoryEmojiCount(categoryName: string) {

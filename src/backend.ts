@@ -1,5 +1,5 @@
 import { Context } from 'koishi'
-import { Config, EmojiAddOptions } from '.'
+import { Config, EmojiAddOptions, FolderImportOptions } from '.'
 import type {} from '@koishijs/plugin-server'
 import fs from 'fs/promises'
 import type {} from '@koishijs/plugin-console'
@@ -188,6 +188,27 @@ export async function applyBackend(ctx: Context, config: Config) {
                 throw new Error(`AI分析失败: ${error.message}`)
             }
         })
+
+        // Folder import endpoints
+        ctx.console.addListener(
+            'emojiluna/scanFolder',
+            async (folderPath: string) => {
+                if (!folderPath) {
+                    throw new Error('文件夹路径不能为空')
+                }
+                return await ctx.emojiluna.scanFolder(folderPath)
+            }
+        )
+
+        ctx.console.addListener(
+            'emojiluna/importFromFolder',
+            async (options: FolderImportOptions) => {
+                if (!options?.folderPath) {
+                    throw new Error('文件夹路径不能为空')
+                }
+                return await ctx.emojiluna.importFromFolder(options)
+            }
+        )
     })
 
     ctx.inject(['server'], (ctx) => {

@@ -1,4 +1,5 @@
 import { Schema } from 'koishi'
+import { DEFAULT_ACCEPTED_IMAGE_TYPES, IMAGE_CONTENT_TYPES, ImageContentType } from './types'
 
 export const Config = Schema.intersect([
     Schema.object({
@@ -165,7 +166,47 @@ export const Config = Schema.intersect([
             })
         )
             .role('table')
-            .description('群组自动获取表情包限制')
+            .description('群组自动获取表情包限制'),
+        enableImageTypeFilter: Schema.boolean()
+            .default(true)
+            .description('是否启用 AI 图片类型过滤（过滤无用图片）'),
+        acceptedImageTypes: Schema.array(
+            Schema.union(
+                IMAGE_CONTENT_TYPES.map((item) =>
+                    Schema.const(item.type).description(item.label)
+                )
+            )
+        )
+            .description('接受的图片类型（只有这些类型的图片会被收集）')
+            .default(DEFAULT_ACCEPTED_IMAGE_TYPES as ImageContentType[]),
+        imageFilterPrompt: Schema.string()
+            .role('textarea')
+            .default(
+                `你是一个图片内容分析专家，需要判断图片的类型并决定是否适合作为表情包收集。
+
+请分析这张图片属于以下哪种类型：
+${IMAGE_CONTENT_TYPES.map((item) => `- ${item.type}: ${item.label} - ${item.description}`).join('\n')}
+
+分析要点：
+1. 观察图片的主要内容和特征
+2. 判断图片的来源（截图、照片、设计图等）
+3. 评估图片是否具有表情包价值（情感表达、趣味性、传播性）
+4. 识别低质量或无用的图片（模糊、广告、二维码等）
+
+请返回JSON格式：
+{
+  "imageType": "类型代码（从上述列表中选择）",
+  "confidence": 0.85,
+  "reason": "判断理由",
+  "isUseful": true
+}
+
+注意：
+- imageType 必须是上述类型代码之一
+- confidence 表示判断置信度（0-1）
+- isUseful 表示这张图片是否有收藏价值（低质量、广告、二维码等应该为 false）`
+            )
+            .description('图片类型过滤提示词')
     }).description('自动获取配置')
 ])
 
@@ -194,6 +235,9 @@ export interface Config {
         string,
         { hourLimit: number; dayLimit: number }
     >
+    enableImageTypeFilter: boolean
+    acceptedImageTypes: ImageContentType[]
+    imageFilterPrompt: string
 }
 
 export const name = 'emojiluna'

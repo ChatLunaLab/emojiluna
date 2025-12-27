@@ -1,5 +1,13 @@
 import { Context, h, Session } from 'koishi'
 import { Config } from './config'
+import { ImageContentType } from './types'
+import {
+    extractFrameRgba,
+    getImageMetadata,
+    ImageMetadata,
+    resizeFrameToGrayscale,
+    sampleFrameIndices
+} from './imageProcessor'
 import fs from 'fs/promises'
 import crypto from 'crypto'
 
@@ -13,20 +21,27 @@ export interface AutoCollectOptions {
         string,
         { hourLimit: number; dayLimit: number }
     >
+    enableImageTypeFilter: boolean
+    acceptedImageTypes: ImageContentType[]
 }
 
 export interface ImageInfo {
     buffer: Buffer
     size: number
     hash: string
-    format: string
+    metadata: ImageMetadata
+}
+
+export interface FrameFeatures {
+    hash: string
+    histogram: number[]
 }
 
 export interface ImageFeatures {
-    phash: string
-    histogram: number[]
+    frames: FrameFeatures[]
     aspectRatio: number
     dimensions: { width: number; height: number }
+    frameCount: number
 }
 
 export interface FrequencyRecord {
@@ -44,6 +59,12 @@ export class AutoCollector {
     private frequencyTracker = new Map<string, FrequencyRecord>()
     private static readonly MAX_HASHES = 10000
     private static readonly FREQUENCY_WINDOW = 10 * 60 * 1000 // 10 minutes in milliseconds
+    private static readonly SIMILARITY_FRAME_SAMPLES = 5
+    private static readonly HASH_WIDTH = 9
+    private static readonly HASH_HEIGHT = 8
+    private static readonly HISTOGRAM_WIDTH = 32
+    private static readonly HISTOGRAM_HEIGHT = 32
+    private static readonly HISTOGRAM_BINS = 64
     private groupAutoCollectLimit: Record<
         string,
         {
@@ -63,7 +84,9 @@ export class AutoCollector {
             similarityThreshold: config.similarityThreshold,
             whitelistGroups: config.whitelistGroups,
             emojiFrequencyThreshold: config.emojiFrequencyThreshold,
-            groupAutoCollectLimit: config.groupAutoCollectLimit
+            groupAutoCollectLimit: config.groupAutoCollectLimit,
+            enableImageTypeFilter: config.enableImageTypeFilter,
+            acceptedImageTypes: config.acceptedImageTypes
         }
         this.loadExistingHashes()
         this.registerCommands()
@@ -82,7 +105,11 @@ export class AutoCollector {
                     const hash = this.calculateImageHash(buffer)
                     this.emojiHashes.add(hash)
 
-                    const features = await this.extractImageFeatures(buffer)
+                    const metadata = await getImageMetadata(buffer)
+                    const features = await this.extractImageFeatures(
+                        buffer,
+                        metadata
+                    )
                     this.imageFeatures.set(hash, features)
                 } catch (error) {
                     this.ctx.logger.warn(
@@ -157,7 +184,12 @@ export class AutoCollector {
                 status += `频次阈值: ${stats.options.emojiFrequencyThreshold}次/10分钟\n`
                 status += `白名单群数: ${stats.options.whitelistGroups.length}\n`
                 status += `已记录哈希数: ${stats.totalHashes}\n`
-                status += `频率记录数: ${stats.frequencyRecords}`
+                status += `频率记录数: ${stats.frequencyRecords}\n`
+                status += `\n图片类型过滤: ${stats.imageTypeFilterEnabled ? '启用' : '禁用'}`
+
+                if (stats.imageTypeFilterEnabled) {
+                    status += `\n接受的图片类型: ${stats.acceptedImageTypes.join(', ')}`
+                }
 
                 if (stats.options.whitelistGroups.length > 0) {
                     status += `\n\n白名单群:\n${stats.options.whitelistGroups.join('\n')}`
@@ -271,6 +303,25 @@ export class AutoCollector {
                 return
             }
 
+            // AI image type filter
+            if (this.options.enableImageTypeFilter) {
+                const imageBase64 = imageInfo.buffer.toString('base64')
+                const filterResult =
+                    await this.ctx.emojiluna.filterImageByType(imageBase64)
+
+                if (filterResult) {
+                    if (!filterResult.isAcceptable) {
+                        this.ctx.logger.debug(
+                            `Image rejected by AI filter: type=${filterResult.imageType}, reason=${filterResult.reason}`
+                        )
+                        return
+                    }
+                    this.ctx.logger.debug(
+                        `Image accepted by AI filter: type=${filterResult.imageType}, confidence=${filterResult.confidence}`
+                    )
+                }
+            }
+
             await this.saveEmoji(imageInfo, session)
         } catch (error) {
             this.ctx.logger.warn(`Failed to process image: ${error.message}`)
@@ -286,12 +337,13 @@ export class AutoCollector {
                 }
             )
             const imageBuffer = Buffer.from(buffer)
+            const metadata = await getImageMetadata(imageBuffer)
 
             return {
                 buffer: imageBuffer,
                 size: imageBuffer.length,
                 hash: this.calculateImageHash(imageBuffer),
-                format: this.detectImageFormat(imageBuffer)
+                metadata
             }
         } catch (error) {
             this.ctx.logger.warn(`Failed to get image info: ${error.message}`)
@@ -324,197 +376,94 @@ export class AutoCollector {
         return crypto.createHash('md5').update(buffer).digest('hex')
     }
 
-    private detectImageFormat(buffer: Buffer): string {
-        const header = buffer.subarray(0, 12)
-
-        if (header[0] === 0xff && header[1] === 0xd8) return 'jpeg'
-        if (
-            header[0] === 0x89 &&
-            header[1] === 0x50 &&
-            header[2] === 0x4e &&
-            header[3] === 0x47
+    private async extractImageFeatures(
+        buffer: Buffer,
+        metadata?: ImageMetadata
+    ): Promise<ImageFeatures> {
+        const imageMetadata = metadata ?? (await getImageMetadata(buffer))
+        const frameIndices = sampleFrameIndices(
+            imageMetadata.frameCount,
+            AutoCollector.SIMILARITY_FRAME_SAMPLES
         )
-            return 'png'
-        if (header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46)
-            return 'gif'
-        if (
-            header[0] === 0x52 &&
-            header[1] === 0x49 &&
-            header[2] === 0x46 &&
-            header[8] === 0x57 &&
-            header[9] === 0x45 &&
-            header[10] === 0x42 &&
-            header[11] === 0x50
-        )
-            return 'webp'
+        const frames: FrameFeatures[] = []
 
-        return 'unknown'
-    }
+        for (const index of frameIndices) {
+            const frame = await extractFrameRgba(
+                buffer,
+                imageMetadata,
+                index
+            )
+            const hashPixels = await resizeFrameToGrayscale(
+                frame,
+                AutoCollector.HASH_WIDTH,
+                AutoCollector.HASH_HEIGHT
+            )
+            const histogramPixels = await resizeFrameToGrayscale(
+                frame,
+                AutoCollector.HISTOGRAM_WIDTH,
+                AutoCollector.HISTOGRAM_HEIGHT
+            )
 
-    private async extractImageFeatures(buffer: Buffer): Promise<ImageFeatures> {
-        const dimensions = this.getImageDimensions(buffer)
-        const phash = this.calculatePerceptualHash(buffer)
-        const histogram = this.calculateHistogram(buffer)
-        const aspectRatio = dimensions.width / dimensions.height
+            frames.push({
+                hash: this.calculateDifferenceHash(
+                    hashPixels,
+                    AutoCollector.HASH_WIDTH,
+                    AutoCollector.HASH_HEIGHT
+                ),
+                histogram: this.calculateHistogramFromPixels(histogramPixels)
+            })
+        }
+
+        const aspectRatio =
+            imageMetadata.height === 0
+                ? 0
+                : imageMetadata.width / imageMetadata.height
 
         return {
-            phash,
-            histogram,
+            frames,
             aspectRatio,
-            dimensions
+            dimensions: {
+                width: imageMetadata.width,
+                height: imageMetadata.height
+            },
+            frameCount: imageMetadata.frameCount
         }
     }
 
-    private getImageDimensions(buffer: Buffer): {
-        width: number
+    private calculateDifferenceHash(
+        pixels: Uint8Array,
+        width: number,
         height: number
-    } {
-        const header = buffer.subarray(0, 24)
-
-        if (
-            header[0] === 0x89 &&
-            header[1] === 0x50 &&
-            header[2] === 0x4e &&
-            header[3] === 0x47
-        ) {
-            const width = header.readUInt32BE(16)
-            const height = header.readUInt32BE(20)
-            return { width, height }
-        }
-
-        if (header[0] === 0xff && header[1] === 0xd8) {
-            for (let i = 2; i < buffer.length - 8; i++) {
-                if (buffer[i] === 0xff && buffer[i + 1] === 0xc0) {
-                    const height = buffer.readUInt16BE(i + 5)
-                    const width = buffer.readUInt16BE(i + 7)
-                    return { width, height }
-                }
-            }
-        }
-
-        return { width: 0, height: 0 }
-    }
-
-    private calculatePerceptualHash(buffer: Buffer): string {
-        const grayscale = this.convertToGrayscale(buffer)
-        const resized = this.resizeImage(grayscale, 8, 8)
-        const dct = this.applyDCT(resized)
-        const median = this.calculateMedian(dct)
-
+    ): string {
         let hash = ''
-        for (let i = 0; i < 64; i++) {
-            hash += dct[i] > median ? '1' : '0'
+
+        for (let y = 0; y < height; y++) {
+            const rowOffset = y * width
+            for (let x = 0; x < width - 1; x++) {
+                const left = pixels[rowOffset + x]
+                const right = pixels[rowOffset + x + 1]
+                hash += left > right ? '1' : '0'
+            }
         }
 
         return hash
     }
 
-    private convertToGrayscale(buffer: Buffer): number[] {
-        const grayscale: number[] = []
-        const format = this.detectImageFormat(buffer)
+    private calculateHistogramFromPixels(pixels: Uint8Array): number[] {
+        const histogram = new Array(
+            AutoCollector.HISTOGRAM_BINS
+        ).fill(0)
+        const binSize = 256 / AutoCollector.HISTOGRAM_BINS
 
-        if (format === 'png') {
-            let offset = 8
-            while (offset < buffer.length) {
-                const chunkLength = buffer.readUInt32BE(offset)
-                const chunkType = buffer
-                    .subarray(offset + 4, offset + 8)
-                    .toString('ascii')
-
-                if (chunkType === 'IDAT') {
-                    const pixelData = buffer.subarray(
-                        offset + 8,
-                        offset + 8 + chunkLength
-                    )
-                    for (let i = 0; i < pixelData.length; i += 4) {
-                        const r = pixelData[i]
-                        const g = pixelData[i + 1]
-                        const b = pixelData[i + 2]
-                        const gray = Math.round(
-                            0.299 * r + 0.587 * g + 0.114 * b
-                        )
-                        grayscale.push(gray)
-                    }
-                    break
-                }
-
-                offset += 12 + chunkLength
-            }
-        } else {
-            for (let i = 0; i < Math.min(buffer.length, 64 * 64); i++) {
-                grayscale.push(buffer[i])
-            }
+        for (const pixel of pixels) {
+            const bin = Math.min(
+                AutoCollector.HISTOGRAM_BINS - 1,
+                Math.floor(pixel / binSize)
+            )
+            histogram[bin]++
         }
 
-        return grayscale.slice(0, 64)
-    }
-
-    private resizeImage(
-        pixels: number[],
-        width: number,
-        height: number
-    ): number[] {
-        const resized: number[] = []
-        const sourceSize = Math.sqrt(pixels.length)
-        const scaleX = sourceSize / width
-        const scaleY = sourceSize / height
-
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const sourceX = Math.floor(x * scaleX)
-                const sourceY = Math.floor(y * scaleY)
-                const index = sourceY * sourceSize + sourceX
-                resized.push(pixels[index] || 0)
-            }
-        }
-
-        return resized
-    }
-
-    private applyDCT(pixels: number[]): number[] {
-        const N = 8
-        const dct: number[] = new Array(N * N)
-
-        for (let u = 0; u < N; u++) {
-            for (let v = 0; v < N; v++) {
-                let sum = 0
-                for (let x = 0; x < N; x++) {
-                    for (let y = 0; y < N; y++) {
-                        sum +=
-                            pixels[x * N + y] *
-                            Math.cos(((2 * x + 1) * u * Math.PI) / (2 * N)) *
-                            Math.cos(((2 * y + 1) * v * Math.PI) / (2 * N))
-                    }
-                }
-
-                const cu = u === 0 ? 1 / Math.sqrt(2) : 1
-                const cv = v === 0 ? 1 / Math.sqrt(2) : 1
-                dct[u * N + v] = ((cu * cv) / 4) * sum
-            }
-        }
-
-        return dct
-    }
-
-    private calculateMedian(values: number[]): number {
-        const sorted = [...values].sort((a, b) => a - b)
-        const mid = Math.floor(sorted.length / 2)
-        return sorted.length % 2 === 0
-            ? (sorted[mid - 1] + sorted[mid]) / 2
-            : sorted[mid]
-    }
-
-    private calculateHistogram(buffer: Buffer): number[] {
-        const histogram = new Array(256).fill(0)
-        const grayscale = this.convertToGrayscale(buffer)
-
-        for (const pixel of grayscale) {
-            if (pixel >= 0 && pixel <= 255) {
-                histogram[pixel]++
-            }
-        }
-
-        const total = grayscale.length
+        const total = pixels.length || 1
         return histogram.map((count) => count / total)
     }
 
@@ -544,15 +493,9 @@ export class AutoCollector {
         features1: ImageFeatures,
         features2: ImageFeatures
     ): number {
-        const phashDistance = this.hammingDistance(
-            features1.phash,
-            features2.phash
-        )
-        const phashSimilarity = 1 - phashDistance / 64
-
-        const histogramSimilarity = this.histogramSimilarity(
-            features1.histogram,
-            features2.histogram
+        const frameSimilarity = this.calculateFrameSetSimilarity(
+            features1.frames,
+            features2.frames
         )
 
         const aspectRatioDiff = Math.abs(
@@ -566,18 +509,49 @@ export class AutoCollector {
         )
 
         const weights = {
-            phash: 0.4,
-            histogram: 0.3,
+            frames: 0.7,
             aspectRatio: 0.2,
             dimension: 0.1
         }
 
         return (
-            phashSimilarity * weights.phash +
-            histogramSimilarity * weights.histogram +
+            frameSimilarity * weights.frames +
             aspectRatioSimilarity * weights.aspectRatio +
             dimensionSimilarity * weights.dimension
         )
+    }
+
+    private calculateFrameSetSimilarity(
+        frames1: FrameFeatures[],
+        frames2: FrameFeatures[]
+    ): number {
+        if (frames1.length === 0 || frames2.length === 0) return 0
+
+        const scores = frames1.map((frame) =>
+            Math.max(
+                ...frames2.map((candidate) =>
+                    this.calculateFrameSimilarity(frame, candidate)
+                )
+            )
+        )
+
+        const total = scores.reduce((sum, score) => sum + score, 0)
+        return total / scores.length
+    }
+
+    private calculateFrameSimilarity(
+        frame1: FrameFeatures,
+        frame2: FrameFeatures
+    ): number {
+        const hashDistance = this.hammingDistance(frame1.hash, frame2.hash)
+        const hashSimilarity =
+            1 - hashDistance / Math.max(frame1.hash.length, 1)
+        const histogramSimilarity = this.histogramSimilarity(
+            frame1.histogram,
+            frame2.histogram
+        )
+
+        return hashSimilarity * 0.7 + histogramSimilarity * 0.3
     }
 
     private calculateDimensionSimilarity(
@@ -603,7 +577,8 @@ export class AutoCollector {
     private async isSimilarToExisting(imageInfo: ImageInfo): Promise<boolean> {
         try {
             const newFeatures = await this.extractImageFeatures(
-                imageInfo.buffer
+                imageInfo.buffer,
+                imageInfo.metadata
             )
 
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -657,7 +632,10 @@ export class AutoCollector {
 
             this.emojiHashes.add(imageInfo.hash)
 
-            const features = await this.extractImageFeatures(imageInfo.buffer)
+            const features = await this.extractImageFeatures(
+                imageInfo.buffer,
+                imageInfo.metadata
+            )
             this.imageFeatures.set(imageInfo.hash, features)
         } catch (error) {
             this.ctx.logger.error(`Failed to save emoji: ${error.message}`)
@@ -672,7 +650,9 @@ export class AutoCollector {
             similarityThreshold: config.similarityThreshold,
             whitelistGroups: config.whitelistGroups,
             emojiFrequencyThreshold: config.emojiFrequencyThreshold,
-            groupAutoCollectLimit: config.groupAutoCollectLimit
+            groupAutoCollectLimit: config.groupAutoCollectLimit,
+            enableImageTypeFilter: config.enableImageTypeFilter,
+            acceptedImageTypes: config.acceptedImageTypes
         }
     }
 
@@ -681,7 +661,9 @@ export class AutoCollector {
             totalHashes: this.emojiHashes.size,
             frequencyRecords: this.frequencyTracker.size,
             isEnabled: this.config.autoCollect,
-            options: this.options
+            options: this.options,
+            imageTypeFilterEnabled: this.options.enableImageTypeFilter,
+            acceptedImageTypes: this.options.acceptedImageTypes
         }
     }
 }

@@ -111,3 +111,101 @@ No specific test configuration found. Tests would likely use the Yakumo mocha in
 - Supports automatic emoji collection from whitelisted groups
 - Includes trigger word matching for automatic emoji responses
 - Web interface provides comprehensive management capabilities
+
+## Frontend Component Structure
+
+### Main Pages
+- **dashboard.vue**: Main control panel with three-tab navigation (Emoji Manager, Category Manager, Tag Manager)
+- **EmojiManager.vue**: Main emoji management page with search, filter, batch operations, and preview
+- **CategoriesManager.vue**: Category management page displaying category grid, click to enter category detail
+- **TagsManager.vue**: Tag management page displaying tag grid, click to enter tag detail
+
+### Detail Pages
+- **CategoryDetail.vue**: Category detail page showing all emojis in the category, supports import/upload/batch move/delete
+- **TagDetail.vue**: Tag detail page showing all emojis with the tag, supports add/remove tag/batch delete
+
+### Common Components
+- **EmojiCard.vue**: Emoji card component with selection mode and hover actions
+- **EmojiDialog.vue**: Edit emoji dialog for modifying category and tags
+- **AddEmojiDialog.vue**: Add emoji dialog supporting file upload and URL modes
+- **ImageSelector.vue**: Image selector for importing from existing emojis
+
+### Icons
+- **emoji.vue**: Emoji icon component
+
+## Backend API Endpoints
+
+Called via `@koishijs/client`'s `send` function:
+
+### Emoji Operations
+- `emojiluna/getEmojiList(options)` - Get emoji list (supports pagination, category, tag filtering)
+- `emojiluna/searchEmoji(keyword)` - Search emojis
+- `emojiluna/addEmoji(emojiData)` - Add single emoji
+- `emojiluna/addEmojis(emojisData[], aiAnalysis)` - Batch add emojis
+- `emojiluna/deleteEmoji(id)` - Delete emoji
+- `emojiluna/updateEmojiCategory(id, category)` - Update emoji category
+- `emojiluna/updateEmojiTags(id, tags)` - Update emoji tags
+- `emojiluna/analyzeEmoji(id)` - AI analyze emoji
+
+### Category Operations
+- `emojiluna/getCategories()` - Get all categories
+- `emojiluna/createCategory(name, description?)` - Create category
+- `emojiluna/deleteCategory(name)` - Delete category
+
+### Tag Operations
+- `emojiluna/getAllTags()` - Get all tags
+
+### Other
+- `emojiluna/getBaseUrl()` - Get base URL for emoji access
+
+## Key Types
+
+```typescript
+interface EmojiItem {
+  id: string
+  name: string
+  category: string
+  tags: string[]
+  size?: number
+}
+
+interface Category {
+  name: string
+  description?: string
+  emojiCount: number
+}
+
+interface EmojiAddOptions {
+  name: string
+  category: string
+  tags: string[]
+  imageData: string  // base64 encoded image data
+  mimeType?: string
+}
+
+interface EmojiSearchOptions {
+  category?: string
+  tags?: string[]
+  limit?: number
+  offset?: number
+}
+```
+
+## UI Patterns
+
+### Selection Mode
+- Click selection button to enter selection mode, cards become selectable
+- After selection, floating action bar appears at bottom for batch move and delete
+
+### Dialogs
+- Uses Element Plus `el-dialog` component
+- Forms use `el-form` with validation rules
+- Supports creatable dropdown selects (categories, tags)
+
+### Grid Layout
+- Uses CSS Grid with auto-fill layout
+- Responsive breakpoints for mobile adaptation
+
+### Navigation
+- Right-side floating navigation bar, expands on hover to show text
+- On mobile, becomes fixed bottom navigation bar
