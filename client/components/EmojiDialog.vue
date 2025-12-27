@@ -1,39 +1,92 @@
 <template>
-    <el-dialog v-model="visible" :title="t('emojiluna.editEmoji')" width="600px" @close="handleClose">
-        <el-form :model="form" label-width="100px" v-loading="loading">
-            <el-form-item :label="t('emojiluna.emojiName')">
-                <el-input v-model="form.name" :placeholder="t('emojiluna.emojiName')" />
-            </el-form-item>
-
-            <el-form-item :label="t('emojiluna.category')">
-                <el-select v-model="form.category" :placeholder="t('emojiluna.category')" style="width: 100%" filterable
-                    allow-create default-first-option>
-                    <el-option v-for="category in categories" :key="category.name" :label="category.name"
-                        :value="category.name" />
-                </el-select>
-            </el-form-item>
-
-            <el-form-item :label="t('emojiluna.tags.default')">
-                <el-select v-model="form.tags" :placeholder="t('emojiluna.tags.default')" style="width: 100%" multiple
-                    filterable allow-create default-first-option>
-                    <el-option v-for="tag in allTags" :key="tag" :label="tag" :value="tag" />
-                </el-select>
-            </el-form-item>
-
-            <el-form-item label="预览">
-                <div class="emoji-preview">
-                    <img :src="emojiUrl" :alt="emoji?.name" @error="handleImageError" />
+    <el-dialog
+        v-model="visible"
+        :title="t('emojiluna.editEmoji')"
+        width="700px"
+        @close="handleClose"
+        class="edit-emoji-dialog"
+        destroy-on-close
+    >
+        <div class="dialog-content">
+            <div class="dialog-layout">
+                <!-- Left: Preview -->
+                <div class="preview-side">
+                    <div class="preview-card">
+                        <img :src="emojiUrl" :alt="emoji?.name" @error="handleImageError" />
+                    </div>
+                    <div class="emoji-meta">
+                        <span class="meta-label">ID: {{ emoji?.id.slice(0, 8) }}...</span>
+                        <span class="meta-size" v-if="emoji?.size">{{ formatSize(emoji.size) }}</span>
+                    </div>
                 </div>
-            </el-form-item>
-        </el-form>
+
+                <!-- Right: Form -->
+                <div class="form-side">
+                    <div class="form-group">
+                        <label class="form-label">{{ t('emojiluna.emojiName') }}</label>
+                        <el-input v-model="form.name" disabled :placeholder="t('emojiluna.emojiName')">
+                            <template #prefix>
+                                <el-icon><Picture /></el-icon>
+                            </template>
+                        </el-input>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">{{ t('emojiluna.category') }}</label>
+                        <el-select
+                            v-model="form.category"
+                            :placeholder="t('emojiluna.category')"
+                            style="width: 100%"
+                            filterable
+                            allow-create
+                            default-first-option
+                        >
+                            <el-option
+                                v-for="category in categories"
+                                :key="category.name"
+                                :label="category.name"
+                                :value="category.name"
+                            />
+                        </el-select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">{{ t('emojiluna.tags.default') }}</label>
+                        <el-select
+                            v-model="form.tags"
+                            :placeholder="t('emojiluna.tags.default')"
+                            style="width: 100%"
+                            multiple
+                            filterable
+                            allow-create
+                            default-first-option
+                            collapse-tags
+                            collapse-tags-tooltip
+                        >
+                            <el-option
+                                v-for="tag in allTags"
+                                :key="tag"
+                                :label="tag"
+                                :value="tag"
+                            />
+                        </el-select>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <template #footer>
-            <span class="dialog-footer">
-                <el-button type="primary" @click="handleSave" :loading="loading">
-                    {{ t('common.save') }}
+            <div class="dialog-footer">
+                <el-button type="danger" text bg @click="handleDelete" class="delete-btn">
+                    <el-icon><Delete /></el-icon> {{ t('common.delete') }}
                 </el-button>
-                <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
-            </span>
+                <div class="footer-actions">
+                    <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
+                    <el-button type="primary" @click="handleSave" :loading="loading">
+                        {{ t('common.save') }}
+                    </el-button>
+                </div>
+            </div>
         </template>
     </el-dialog>
 </template>
@@ -42,7 +95,8 @@
 import { ref, reactive, watch, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { send } from '@koishijs/client'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Picture, Delete } from '@element-plus/icons-vue'
 import type { EmojiItem, Category } from 'koishi-plugin-emojiluna'
 
 interface Props {
@@ -84,6 +138,14 @@ const emojiUrl = computed(() => {
     return `${props.baseUrl}/get/${props.emoji.name}`
 })
 
+const formatSize = (bytes: number) => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
 const loadData = async () => {
     try {
         const [categoriesData, tagsData] = await Promise.all([
@@ -112,24 +174,55 @@ const handleSave = async () => {
 
     loading.value = true
     try {
+        const promises = []
+
         // 更新分类
         if (form.category !== props.emoji.category) {
-            await send('emojiluna/updateEmojiCategory', props.emoji.id, form.category)
+            promises.push(send('emojiluna/updateEmojiCategory', props.emoji.id, form.category))
         }
 
         // 更新标签
         if (JSON.stringify(form.tags.sort()) !== JSON.stringify([...props.emoji.tags].sort())) {
-            await send('emojiluna/updateEmojiTags', props.emoji.id, form.tags)
+            promises.push(send('emojiluna/updateEmojiTags', props.emoji.id, form.tags))
         }
 
-        ElMessage.success(t('emojiluna.updateSuccess'))
-        emit('success')
-        handleClose()
+        if (promises.length > 0) {
+            await Promise.all(promises)
+            ElMessage.success(t('emojiluna.updateSuccess'))
+            emit('success')
+            handleClose()
+        } else {
+            handleClose()
+        }
     } catch (error) {
         console.error('Failed to update emoji:', error)
         ElMessage.error(t('emojiluna.updateFailed'))
     } finally {
         loading.value = false
+    }
+}
+
+const handleDelete = async () => {
+    if (!props.emoji) return
+    try {
+        await ElMessageBox.confirm(
+            t('emojiluna.deleteConfirm'),
+            t('common.warning'),
+            {
+                confirmButtonText: t('common.delete'),
+                cancelButtonText: t('common.cancel'),
+                type: 'warning',
+            }
+        )
+
+        await send('emojiluna/deleteEmoji', props.emoji.id)
+        ElMessage.success('删除成功')
+        emit('success')
+        handleClose()
+    } catch (error) {
+        if (error !== 'cancel') {
+             ElMessage.error('删除失败')
+        }
     }
 }
 
@@ -160,26 +253,97 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.emoji-preview {
-    width: 100px;
-    height: 100px;
-    border: 1px solid var(--k-border-color);
-    border-radius: 8px;
-    overflow: hidden;
+.dialog-content {
+    padding: 0 4px;
+}
+
+.dialog-layout {
+    display: flex;
+    gap: 24px;
+}
+
+.preview-side {
+    width: 220px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.preview-card {
+    width: 100%;
+    box-sizing: border-box;
+    aspect-ratio: 1;
+    background: var(--k-color-surface-1); /* Koishi theme */
+    border: 1px solid var(--k-color-divider);
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--k-color-surface-1);
+    padding: 16px;
+    overflow: hidden;
 }
 
-.emoji-preview img {
+.preview-card img {
     max-width: 100%;
     max-height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    transition: transform 0.3s ease;
+}
+
+.preview-card:hover img {
+    transform: scale(1.05);
+}
+
+.emoji-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0 4px;
+}
+
+.meta-label {
+    font-size: 12px;
+    color: var(--k-text-light);
+    font-family: monospace;
+}
+
+.meta-size {
+    font-size: 12px;
+    color: var(--k-text-light);
+    background: var(--k-color-surface-2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    align-self: flex-start;
+}
+
+.form-side {
+    flex: 1;
+    min-width: 0;
+    padding-top: 4px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: var(--k-text-light);
+    line-height: 1.4;
 }
 
 .dialog-footer {
     display: flex;
-    gap: 10px;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 10px;
+}
+
+.footer-actions {
+    display: flex;
+    gap: 12px;
 }
 </style>

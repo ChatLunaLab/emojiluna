@@ -1,134 +1,144 @@
 <template>
   <div class="emoji-manager">
-    <div class="toolbar">
-      <div class="search-bar">
-        <el-input
-          v-model="searchKeyword"
-          :placeholder="t('emojiluna.search')"
-          size="large"
-          class="search-input"
-          @keyup.enter="handleSearch"
-          clearable
-        />
-        <el-button
-          type="primary"
-          size="large"
-          class="search-button"
-          @click="handleSearch"
-        >
-          <el-icon><Search /></el-icon>
-        </el-button>
+    <!-- Toolbar -->
+    <div class="toolbar-container">
+      <div class="toolbar-main">
+        <div class="search-section">
+          <el-input
+            v-model="searchKeyword"
+            :placeholder="t('emojiluna.search')"
+            class="search-input"
+            @keyup.enter="handleSearch"
+            clearable
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+        </div>
+
+        <div class="actions-section">
+          <el-button
+            :type="isSelectionMode ? 'danger' : 'default'"
+            circle
+            @click="toggleSelectionMode"
+            :title="isSelectionMode ? t('common.cancel') : '选择'"
+          >
+            <el-icon v-if="isSelectionMode"><Close /></el-icon>
+            <el-icon v-else><Check /></el-icon>
+          </el-button>
+
+          <el-dropdown trigger="click" @command="handleFilterCommand">
+             <el-button circle>
+               <el-icon><Filter /></el-icon>
+             </el-button>
+             <template #dropdown>
+               <el-dropdown-menu>
+                 <el-dropdown-item command="reset">重置筛选</el-dropdown-item>
+                 <el-dropdown-item divided disabled>按分类筛选</el-dropdown-item>
+                 <el-dropdown-item
+                    v-for="cat in categories"
+                    :key="cat.name"
+                    :command="{ type: 'category', value: cat.name }"
+                 >
+                   {{ cat.name }}
+                 </el-dropdown-item>
+               </el-dropdown-menu>
+             </template>
+          </el-dropdown>
+
+          <el-button
+            type="primary"
+            circle
+            @click="showAddDialog = true"
+            v-if="!isSelectionMode"
+          >
+            <el-icon><Plus /></el-icon>
+          </el-button>
+        </div>
       </div>
-      <div class="action-section">
-        <el-button
-          type="primary"
-          size="large"
-          @click="showAddDialog = true"
-          class="add-button"
-        >
-          <el-icon><Plus /></el-icon>
-          {{ t('emojiluna.addEmoji') }}
-        </el-button>
-        <el-button
-          circle
-          size="large"
-          class="refresh-action"
-          @click="refreshData"
-          :title="t('common.refresh')"
-        >
-          <el-icon><RefreshRight /></el-icon>
-        </el-button>
+
+      <!-- Active Filters Display -->
+      <div class="active-filters" v-if="selectedCategory || selectedTag">
+         <el-tag
+            v-if="selectedCategory"
+            closable
+            @close="clearCategoryFilter"
+            type="info"
+            size="small"
+         >
+           分类: {{ selectedCategory }}
+         </el-tag>
+         <el-tag
+            v-if="selectedTag"
+            closable
+            @close="clearTagFilter"
+            type="info"
+            size="small"
+         >
+           标签: {{ selectedTag }}
+         </el-tag>
       </div>
     </div>
 
-    <div class="filters">
-      <div class="filter-group">
-        <el-text class="filter-label">筛选方式：</el-text>
-        <el-select
-          v-model="selectedFilter"
-          placeholder="筛选方式"
-          style="width: 150px"
-          @change="handleFilterChange"
-        >
-          <el-option :label="t('emojiluna.filter.all')" value="all" />
-          <el-option :label="t('emojiluna.filter.byCategory')" value="category" />
-          <el-option :label="t('emojiluna.filter.byTag')" value="tag" />
-        </el-select>
-      </div>
-
-      <div class="filter-group" v-if="selectedFilter === 'category'">
-        <el-text class="filter-label">分类：</el-text>
-        <el-select
-          v-model="selectedCategory"
-          placeholder="选择分类"
-          style="width: 200px"
-          @change="handleFilterApply"
-          clearable
-        >
-          <el-option
-            v-for="category in categories"
-            :key="category.name"
-            :label="`${category.name} (${category.emojiCount})`"
-            :value="category.name"
-          />
-        </el-select>
-      </div>
-
-      <div class="filter-group" v-if="selectedFilter === 'tag'">
-        <el-text class="filter-label">标签：</el-text>
-        <el-select
-          v-model="selectedTag"
-          placeholder="选择标签"
-          style="width: 200px"
-          @change="handleFilterApply"
-          clearable
-        >
-          <el-option
-            v-for="tag in allTags"
-            :key="tag"
-            :label="tag"
-            :value="tag"
-          />
-        </el-select>
-      </div>
-
-      <el-button @click="resetFilters" class="reset-button">
-        <el-icon><RefreshRight /></el-icon>
-        重置筛选
-      </el-button>
-    </div>
-
-    <div class="emoji-grid" v-loading="loading">
+    <!-- Emoji Grid -->
+    <div class="emoji-grid-container" v-loading="loading">
       <template v-if="emojis.length > 0">
-        <EmojiCard
-          v-for="emoji in emojis"
-          :key="emoji.id"
-          :emoji="emoji"
-          :base-url="baseUrl"
-          @click="handleEmojiClick"
-          @edit="handleEmojiEdit"
-          @delete="handleEmojiDelete"
-          class="emoji-card-item"
-        />
+        <div class="emoji-grid">
+            <EmojiCard
+              v-for="emoji in emojis"
+              :key="emoji.id"
+              :emoji="emoji"
+              :base-url="baseUrl"
+              :selectable="isSelectionMode"
+              :selected="isSelected(emoji)"
+              @click="handleEmojiClick"
+              @select="handleEmojiSelect"
+              @edit="handleEmojiEdit"
+              @delete="handleEmojiDelete"
+              class="emoji-card-item"
+            />
+        </div>
       </template>
       <div v-else class="no-emojis">
         <el-empty :description="t('emojiluna.noEmojis')" />
       </div>
     </div>
 
+    <!-- Pagination -->
     <div class="pagination" v-if="total > pageSize">
       <el-pagination
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
-        :page-sizes="[20, 40, 60, 100]"
+        :page-sizes="[20, 50, 100]"
         :total="total"
-        layout="total, sizes, prev, pager, next, jumper"
+        layout="prev, pager, next"
         @size-change="handleSizeChange"
         @current-change="handleCurrentChange"
         background
       />
     </div>
 
+    <!-- Floating Action Bar (Selection Mode) -->
+    <Transition name="slide-up">
+      <div class="floating-action-bar" v-if="isSelectionMode && selectedEmojis.length > 0">
+        <div class="selection-count">
+            已选择 {{ selectedEmojis.length }} 项
+        </div>
+        <div class="selection-actions">
+             <el-button type="primary" text bg @click="openMoveDialog">
+                <el-icon><FolderOpened /></el-icon>
+                移动到...
+            </el-button>
+            <el-button type="danger" text bg @click="handleBatchDelete">
+                <el-icon><Delete /></el-icon>
+                删除
+            </el-button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Dialogs -->
     <AddEmojiDialog
       v-model="showAddDialog"
       @success="handleAddSuccess"
@@ -141,83 +151,121 @@
       @success="handleEditSuccess"
     />
 
+    <!-- Move to Category Dialog -->
+    <el-dialog
+        v-model="showMoveDialog"
+        title="移动到分类"
+        width="400px"
+    >
+        <el-select v-model="targetCategory" placeholder="选择目标分类" style="width: 100%">
+            <el-option
+                v-for="cat in categories"
+                :key="cat.name"
+                :label="cat.name"
+                :value="cat.name"
+            />
+        </el-select>
+        <template #footer>
+            <span class="dialog-footer">
+                <el-button @click="showMoveDialog = false">取消</el-button>
+                <el-button type="primary" @click="confirmMove" :loading="moving">
+                    确定
+                </el-button>
+            </span>
+        </template>
+    </el-dialog>
+
+    <!-- Preview Dialog -->
     <el-dialog
       v-model="showPreviewDialog"
       :title="previewEmoji?.name || '表情包预览'"
-      width="500px"
+      width="600px"
       @close="handlePreviewClose"
+      class="preview-dialog"
+      align-center
     >
       <div class="preview-content">
-        <div class="preview-image-container">
-          <img
-            :src="previewEmojiUrl"
-            :alt="previewEmoji?.name"
-            class="preview-image"
-            @error="handlePreviewImageError"
-          />
-        </div>
+        <div class="preview-layout">
+          <div class="preview-image-wrapper">
+            <div class="image-box">
+               <img
+                :src="previewEmojiUrl"
+                :alt="previewEmoji?.name"
+                class="preview-image"
+                @error="handlePreviewImageError"
+              />
+            </div>
+            <div class="image-meta">
+              <span class="meta-badge" v-if="previewEmoji?.size">{{ formatSize(previewEmoji.size) }}</span>
+              <span class="meta-badge">{{ previewEmoji?.id.slice(0, 8) }}...</span>
+            </div>
+          </div>
 
-        <div class="preview-info">
-          <div class="info-item">
-            <span class="info-label">名称：</span>
-            <span class="info-value">{{ previewEmoji?.name }}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">分类：</span>
-            <span class="info-value">{{ previewEmoji?.category }}</span>
-          </div>
-          <div class="info-item" v-if="previewEmoji?.tags?.length">
-            <span class="info-label">标签：</span>
-            <span class="info-value">
-              <el-tag
-                v-for="tag in previewEmoji.tags"
-                :key="tag"
-                size="small"
-                class="tag-item"
-              >
-                {{ tag }}
-              </el-tag>
-            </span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">链接：</span>
-            <el-input
-              v-model="previewEmojiLink"
-              readonly
-              size="small"
-              class="link-input"
-            >
-              <template #append>
-                <el-button @click="copyPreviewLink" :icon="copyIcon">
-                  复制
-                </el-button>
-              </template>
-            </el-input>
+          <div class="preview-details">
+            <div class="detail-group">
+                <label class="detail-label">名称</label>
+                <div class="detail-value text-strong">{{ previewEmoji?.name }}</div>
+            </div>
+
+            <div class="detail-group">
+                <label class="detail-label">分类</label>
+                <div class="detail-value">
+                     <el-tag effect="light" round>{{ previewEmoji?.category }}</el-tag>
+                </div>
+            </div>
+
+            <div class="detail-group" v-if="previewEmoji?.tags?.length">
+                <label class="detail-label">标签</label>
+                <div class="detail-value tags-wrapper">
+                  <el-tag
+                    v-for="tag in previewEmoji.tags"
+                    :key="tag"
+                    size="small"
+                    type="info"
+                    effect="plain"
+                    class="tag-item"
+                    round
+                  >
+                    {{ tag }}
+                  </el-tag>
+                </div>
+            </div>
+
+            <div class="detail-group">
+                <label class="detail-label">链接</label>
+                <div class="link-box" @click="copyPreviewLink">
+                    <span class="link-text">{{ previewEmojiLink }}</span>
+                    <el-icon class="copy-icon"><DocumentCopy /></el-icon>
+                </div>
+            </div>
           </div>
         </div>
       </div>
 
       <template #footer>
-        <span class="dialog-footer">
-          <el-button type="primary" @click="copyPreviewLink">
-            <el-icon><DocumentCopy /></el-icon>
-            复制链接
-          </el-button>
-          <el-button
-            type="warning"
-            @click="handleAIAnalyze"
-            :loading="aiCategorizingId === previewEmoji?.id"
-            :disabled="aiCategorizingId !== ''"
-          >
-            <el-icon><MagicStick /></el-icon>
-            AI分析
-          </el-button>
-          <el-button @click="handlePreviewEdit">
-            <el-icon><Edit /></el-icon>
-            编辑
-          </el-button>
-          <el-button @click="handlePreviewClose">关闭</el-button>
-        </span>
+        <div class="dialog-footer">
+          <div class="footer-left">
+              <el-button
+                type="warning"
+                text
+                bg
+                @click="handleAIAnalyze"
+                :loading="aiCategorizingId === previewEmoji?.id"
+                :disabled="aiCategorizingId !== ''"
+                class="ai-btn"
+              >
+                <el-icon><MagicStick /></el-icon>
+                AI 重新分析
+              </el-button>
+          </div>
+          <div class="footer-right">
+              <el-button @click="handlePreviewEdit" round>
+                <el-icon><Edit /></el-icon>
+                编辑
+              </el-button>
+              <el-button type="primary" @click="handlePreviewClose" round>关闭</el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -228,7 +276,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { send } from '@koishijs/client'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, RefreshRight, DocumentCopy, Edit, MagicStick } from '@element-plus/icons-vue'
+import { Search, Plus, RefreshRight, DocumentCopy, Edit, MagicStick, Filter, Delete, FolderOpened, Check, Close } from '@element-plus/icons-vue'
 import EmojiCard from './EmojiCard.vue'
 import EmojiDialog from './EmojiDialog.vue'
 import AddEmojiDialog from './AddEmojiDialog.vue'
@@ -236,19 +284,22 @@ import type { EmojiItem, Category, EmojiSearchOptions } from 'koishi-plugin-emoj
 
 const { t } = useI18n()
 
+// Data State
 const loading = ref(false)
 const emojis = ref<EmojiItem[]>([])
 const categories = ref<Category[]>([])
 const allTags = ref<string[]>([])
 const total = ref(0)
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(50) // Increased default page size
+const baseUrl = ref('')
 
+// Filter State
 const searchKeyword = ref('')
-const selectedFilter = ref('all')
 const selectedCategory = ref('')
 const selectedTag = ref('')
 
+// UI State
 const showAddDialog = ref(false)
 const showEditDialog = ref(false)
 const selectedEmoji = ref<EmojiItem>()
@@ -257,7 +308,12 @@ const previewEmoji = ref<EmojiItem>()
 const copyIcon = ref(DocumentCopy)
 const aiCategorizingId = ref<string>('')
 
-const baseUrl = ref('')
+// Selection Mode State
+const isSelectionMode = ref(false)
+const selectedEmojis = ref<EmojiItem[]>([])
+const showMoveDialog = ref(false)
+const targetCategory = ref('')
+const moving = ref(false)
 
 const previewEmojiUrl = computed(() => {
   if (!previewEmoji.value) return ''
@@ -269,6 +325,15 @@ const previewEmojiLink = computed(() => {
   return `${baseUrl.value}/get/${previewEmoji.value.name}`
 })
 
+const formatSize = (bytes: number) => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+// Data Loading
 const loadEmojis = async () => {
   loading.value = true
   try {
@@ -277,24 +342,32 @@ const loadEmojis = async () => {
       offset: (currentPage.value - 1) * pageSize.value
     }
 
-    if (selectedFilter.value === 'category' && selectedCategory.value) {
+    if (selectedCategory.value) {
       options.category = selectedCategory.value
     }
 
-    if (selectedFilter.value === 'tag' && selectedTag.value) {
+    if (selectedTag.value) {
       options.tags = [selectedTag.value]
     }
 
     let result
     if (searchKeyword.value.trim()) {
       result = await send('emojiluna/searchEmoji', searchKeyword.value.trim())
+      // Client-side filtering for category/tags if search is used (since backend search might be global)
+       if (selectedCategory.value) {
+            result = result.filter((e: EmojiItem) => e.category === selectedCategory.value)
+       }
       emojis.value = result || []
       total.value = emojis.value.length
     } else {
       result = await send('emojiluna/getEmojiList', options)
       emojis.value = result || []
 
-      const allEmojis = await send('emojiluna/getEmojiList', {})
+      // Ideally get count from API, but for now reuse logic
+      const allEmojis = await send('emojiluna/getEmojiList', {
+          category: selectedCategory.value || undefined,
+          tags: selectedTag.value ? [selectedTag.value] : undefined
+      })
       total.value = allEmojis?.length || 0
     }
   } catch (error) {
@@ -330,25 +403,32 @@ const refreshData = async () => {
   ])
 }
 
+// Event Handlers
 const handleSearch = () => {
   currentPage.value = 1
   loadEmojis()
 }
 
-const handleFilterChange = () => {
-  selectedCategory.value = ''
-  selectedTag.value = ''
-  currentPage.value = 1
-  loadEmojis()
+const handleFilterCommand = (command: any) => {
+    if (command === 'reset') {
+        resetFilters()
+    } else if (command.type === 'category') {
+        selectedCategory.value = command.value
+        loadEmojis()
+    }
 }
 
-const handleFilterApply = () => {
-  currentPage.value = 1
-  loadEmojis()
+const clearCategoryFilter = () => {
+    selectedCategory.value = ''
+    loadEmojis()
+}
+
+const clearTagFilter = () => {
+    selectedTag.value = ''
+    loadEmojis()
 }
 
 const resetFilters = () => {
-  selectedFilter.value = 'all'
   selectedCategory.value = ''
   selectedTag.value = ''
   searchKeyword.value = ''
@@ -398,6 +478,87 @@ const handleEmojiDelete = async (emoji: EmojiItem) => {
       ElMessage.error('删除失败')
     }
   }
+}
+
+// Selection Mode Logic
+const toggleSelectionMode = () => {
+    isSelectionMode.value = !isSelectionMode.value
+    selectedEmojis.value = []
+}
+
+const isSelected = (emoji: EmojiItem) => {
+    return selectedEmojis.value.some(e => e.id === emoji.id)
+}
+
+const handleEmojiSelect = (emoji: EmojiItem) => {
+    const index = selectedEmojis.value.findIndex(e => e.id === emoji.id)
+    if (index > -1) {
+        selectedEmojis.value.splice(index, 1)
+    } else {
+        selectedEmojis.value.push(emoji)
+    }
+}
+
+const handleBatchDelete = async () => {
+    if (selectedEmojis.value.length === 0) return
+
+    try {
+         await ElMessageBox.confirm(
+            `确定要删除选中的 ${selectedEmojis.value.length} 个表情包吗？`,
+            '警告',
+            {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                type: 'warning',
+            }
+        )
+
+        // Sequential delete or Parallel?
+        // Backend API seems single delete. Use Promise.all
+        const deletePromises = selectedEmojis.value.map(emoji => send('emojiluna/deleteEmoji', emoji.id))
+        await Promise.all(deletePromises)
+
+        ElMessage.success(`成功删除 ${selectedEmojis.value.length} 个表情包`)
+        selectedEmojis.value = []
+        isSelectionMode.value = false
+        refreshData()
+    } catch (error) {
+        if (error !== 'cancel') {
+             console.error('Batch delete failed', error)
+             ElMessage.error('批量删除失败')
+        }
+    }
+}
+
+const openMoveDialog = () => {
+    targetCategory.value = ''
+    showMoveDialog.value = true
+}
+
+const confirmMove = async () => {
+    if (!targetCategory.value) {
+        ElMessage.warning('请选择目标分类')
+        return
+    }
+
+    moving.value = true
+    try {
+        const movePromises = selectedEmojis.value.map(emoji => {
+            return send('emojiluna/updateEmojiCategory', emoji.id, targetCategory.value)
+        })
+
+        await Promise.all(movePromises)
+        ElMessage.success('移动成功')
+        showMoveDialog.value = false
+        selectedEmojis.value = []
+        isSelectionMode.value = false
+        refreshData()
+    } catch (error) {
+        console.error('Move failed', error)
+        ElMessage.error('移动失败')
+    } finally {
+        moving.value = false
+    }
 }
 
 const handleAddSuccess = () => {
@@ -451,13 +612,11 @@ const handleAIAnalyze = async () => {
       if (updates.length > 0) {
         ElMessage.success(`AI分析完成，已更新：${updates.join(', ')}`)
 
-        // 更新局部状态
         if (previewEmoji.value) {
           previewEmoji.value.category = newData.category
           previewEmoji.value.tags = newData.tags
         }
 
-        // 刷新数据
         await refreshData()
       } else {
         ElMessage.info('没有检测到需要更新的内容')
@@ -478,243 +637,291 @@ onMounted(refreshData)
 
 <style scoped>
 .emoji-manager {
-  padding: 0;
+  position: relative;
+  min-height: 100%;
 }
 
-.toolbar {
+.toolbar-container {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--k-bg-light); /* fallback */
+  background: var(--k-color-base);
+  padding: 12px 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid transparent;
+}
+
+.toolbar-main {
   display: flex;
-  gap: 20px;
-  margin-bottom: 20px;
+  gap: 12px;
   align-items: center;
-  padding: 16px;
-  background: var(--k-card-bg);
-  border-radius: 6px;
-  border: 1px solid var(--k-card-border);
 }
 
-
-.search-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.search-section {
   flex: 1;
-  max-width: 500px;
-}
-
-.search-input {
-  flex: 1;
+  max-width: 400px;
 }
 
 .search-input :deep(.el-input__wrapper) {
-  background: var(--k-hover-bg);
+  border-radius: 20px;
+  background-color: var(--k-color-surface-1);
+  box-shadow: none !important;
+  border: 1px solid var(--k-color-divider);
 }
 
-.search-button {
-  padding: 12px 24px;
-  font-weight: 600;
-  margin-left: 0;
+.search-input :deep(.el-input__wrapper:hover),
+.search-input :deep(.el-input__wrapper.is-focus) {
+    background-color: var(--k-color-surface-2);
 }
 
-.search-button:hover {
-  background: var(--k-hover-bg);
-}
-
-.refresh-action {
-  margin-left: auto;
-}
-
-.refresh-action:hover {
-  background: var(--k-hover-bg);
-  color: var(--k-color-primary);
-}
-
-.action-section {
-  flex-shrink: 0;
-  margin-left: auto;
+.actions-section {
   display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.add-button {
-  padding: 12px 24px;
-  font-weight: 600;
-}
-
-.add-button:hover {
-  background: var(--k-hover-bg);
-  color: var(--k-color-primary);
-}
-
-.filters {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 20px;
-  align-items: center;
-  flex-wrap: wrap;
-  padding: 12px 16px;
-  background: var(--k-card-bg);
-  border-radius: 4px;
-  border: 1px solid var(--k-card-border);
-}
-
-.filter-group {
-  display: flex;
-  align-items: center;
   gap: 8px;
-}
-
-.filter-label {
-  font-weight: 500;
-  color: var(--k-text-normal);
-  white-space: nowrap;
-}
-
-.reset-button {
+  align-items: center;
   margin-left: auto;
+}
+
+.active-filters {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.emoji-grid-container {
+    padding-bottom: 80px; /* Space for floating bar */
 }
 
 .emoji-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
   margin-bottom: 20px;
-  min-height: 400px;
 }
 
-.emoji-card-item {
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.emoji-card-item:hover {
-  opacity: 0.8;
-}
-
-.no-emojis {
-  grid-column: 1 / -1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 400px;
-}
-
+/* Pagination */
 .pagination {
   display: flex;
   justify-content: center;
-  padding: 20px;
+  padding: 20px 0;
 }
 
-/* 预览对话框样式 */
-.preview-content {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+/* Floating Action Bar */
+.floating-action-bar {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--k-color-base);
+    border: 1px solid var(--k-color-divider);
+    border-radius: 12px;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    z-index: 100;
 }
 
-.preview-image-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
-  background: var(--k-color-surface-1);
-  border-radius: 6px;
-  border: 1px solid var(--k-border-color);
+.selection-count {
+    font-weight: 600;
+    color: var(--k-color-text);
+}
+
+.selection-actions {
+    display: flex;
+    gap: 12px;
+}
+
+/* Transitions */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translate(-50%, 100%);
+  opacity: 0;
+}
+
+/* Preview Dialog Styles */
+.preview-dialog :deep(.el-dialog__body) {
+    padding-top: 10px;
+    padding-bottom: 20px;
+}
+
+.preview-layout {
+    display: flex;
+    gap: 24px;
+}
+
+.preview-image-wrapper {
+    width: 200px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.image-box {
+    width: 100%;
+    box-sizing: border-box;
+    aspect-ratio: 1;
+    background: var(--k-color-surface-1);
+    border: 1px solid var(--k-color-divider);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow: hidden;
 }
 
 .preview-image {
-  max-width: 200px;
-  max-height: 200px;
-  border-radius: 4px;
-  object-fit: contain;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transition: transform 0.3s ease;
 }
 
-.preview-info {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.image-box:hover .preview-image {
+    transform: scale(1.05);
 }
 
-.info-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+.image-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
-.info-label {
-  font-weight: 600;
-  color: var(--k-text-normal);
-  min-width: 50px;
-  flex-shrink: 0;
+.meta-badge {
+    font-size: 12px;
+    color: var(--k-text-light);
+    background: var(--k-color-surface-2);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-family: monospace;
 }
 
-.info-value {
-  flex: 1;
-  color: var(--k-text-light);
+.preview-details {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding-top: 4px;
+}
+
+.detail-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.detail-label {
+    font-size: 12px;
+    color: var(--k-text-light);
+    font-weight: 500;
+}
+
+.detail-value {
+    font-size: 14px;
+    color: var(--k-color-text);
+    line-height: 1.5;
+}
+
+.text-strong {
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.tags-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .tag-item {
-  margin-right: 6px;
-  margin-bottom: 4px;
+    margin: 0 !important;
 }
 
-.link-input {
-  flex: 1;
+.link-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--k-color-surface-2);
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.link-box:hover {
+    background: var(--k-color-surface-1);
+    border-color: var(--k-color-primary);
+}
+
+.link-text {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--k-text-light);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 12px;
+}
+
+.copy-icon {
+    color: var(--k-text-light);
+}
+
+.link-box:hover .copy-icon {
+    color: var(--k-color-primary);
 }
 
 .dialog-footer {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
 }
 
-/* 响应式设计 */
+.footer-left {
+    display: flex;
+    gap: 12px;
+}
+
+.footer-right {
+    display: flex;
+    gap: 12px;
+}
+
+.ai-btn:hover {
+    color: #ec4899;
+}
+
+/* Responsive */
 @media (max-width: 768px) {
-  .toolbar {
-    flex-direction: column;
-    gap: 15px;
-    padding: 15px;
-  }
+    .emoji-grid {
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: 8px;
+    }
 
-  .search-section {
-    width: 100%;
-    max-width: none;
-  }
+    .preview-layout {
+        flex-direction: column;
+    }
 
-  .filters {
-    gap: 10px;
-    padding: 10px 15px;
-  }
+    .preview-image-wrapper {
+        width: 100%;
+        flex-direction: row;
+        align-items: center;
+    }
 
-  .filter-group {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-
-  .emoji-grid {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 15px;
-  }
-}
-
-@media (max-width: 480px) {
-  .emoji-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 10px;
-  }
-
-  .filters {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .filter-group {
-    width: 100%;
-  }
-
-  .filter-group .el-select {
-    width: 100% !important;
-  }
+    .image-box {
+        width: 120px;
+    }
 }
 </style>

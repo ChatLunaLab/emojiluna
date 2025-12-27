@@ -1,89 +1,211 @@
 <template>
-    <el-dialog v-model="visible" :title="t('emojiluna.addEmoji')" width="600px" @close="handleClose">
-        <el-tabs v-model="activeTab" type="card">
-            <!-- 文件上传 -->
-            <el-tab-pane label="文件上传" name="upload">
-                <el-form :model="form" label-width="80px" v-loading="loading">
-                    <el-form-item :label="t('emojiluna.category')">
-                        <el-select v-model="form.category" :placeholder="t('emojiluna.category')" style="width: 100%"
-                            filterable allow-create default-first-option>
-                            <el-option v-for="category in categories" :key="category.name" :label="category.name"
-                                :value="category.name" />
-                        </el-select>
-                    </el-form-item>
+    <el-dialog
+        v-model="visible"
+        :title="t('emojiluna.addEmoji')"
+        width="550px"
+        @close="handleClose"
+        class="add-emoji-dialog"
+        destroy-on-close
+    >
+        <div class="dialog-content">
+            <!-- Mode Switcher -->
+            <div class="mode-switcher">
+                <div
+                    class="mode-item"
+                    :class="{ active: activeTab === 'upload' }"
+                    @click="activeTab = 'upload'"
+                >
+                    <div class="mode-icon-wrapper">
+                        <el-icon><UploadFilled /></el-icon>
+                    </div>
+                    <span>{{ t('emojiluna.uploadFile') }}</span>
+                </div>
+                <div
+                    class="mode-item"
+                    :class="{ active: activeTab === 'url' }"
+                    @click="activeTab = 'url'"
+                >
+                    <div class="mode-icon-wrapper">
+                        <el-icon><Link /></el-icon>
+                    </div>
+                    <span>{{ t('emojiluna.addFromUrl') }}</span>
+                </div>
+            </div>
 
-                    <el-form-item :label="t('emojiluna.tags.default')">
-                        <el-select v-model="form.tags" :placeholder="t('emojiluna.tags.default')" style="width: 100%"
-                            multiple filterable allow-create default-first-option>
-                            <el-option v-for="tag in allTags" :key="tag" :label="tag" :value="tag" />
-                        </el-select>
-                    </el-form-item>
-
-                    <el-form-item label="AI 分析">
-                        <el-switch v-model="form.aiAnalysis" />
-                        <el-tooltip class="box-item" effect="dark"
-                            content="开启后，将使用 AI 自动为新表情包生成更精准的名称、分类和标签。如果关闭，则使用文件名作为名称，并应用当前表单设置。" placement="top">
-                            <el-icon style="margin-left: 8px; color: var(--k-text-light);">
-                                <QuestionFilled />
-                            </el-icon>
-                        </el-tooltip>
-                    </el-form-item>
-
-                    <el-form-item label="选择文件" required>
-                        <el-upload v-model:file-list="fileList" action="#" list-type="picture-card" :auto-upload="false"
-                            multiple accept="image/*">
-                            <el-icon>
-                                <Plus />
-                            </el-icon>
-                        </el-upload>
-                    </el-form-item>
-                </el-form>
-            </el-tab-pane>
-
-            <!-- URL 添加 -->
-            <el-tab-pane label="URL 添加" name="url">
-                <el-form :model="urlForm" label-width="80px" v-loading="loading">
-                    <el-form-item :label="t('emojiluna.emojiName')" required>
-                        <el-input v-model="urlForm.name" :placeholder="t('emojiluna.emojiName')"
-                            @input="validateUrlForm" />
-                    </el-form-item>
-
-                    <el-form-item :label="t('emojiluna.category')">
-                        <el-select v-model="urlForm.category" :placeholder="t('emojiluna.category')" style="width: 100%"
-                            filterable allow-create default-first-option>
-                            <el-option v-for="category in categories" :key="category.name" :label="category.name"
-                                :value="category.name" />
-                        </el-select>
-                    </el-form-item>
-
-                    <el-form-item :label="t('emojiluna.tags.default')">
-                        <el-select v-model="urlForm.tags" :placeholder="t('emojiluna.tags.default')" style="width: 100%"
-                            multiple filterable allow-create default-first-option>
-                            <el-option v-for="tag in allTags" :key="tag" :label="tag" :value="tag" />
-                        </el-select>
-                    </el-form-item>
-
-                    <el-form-item label="图片URL" required>
-                        <el-input v-model="urlForm.url" :placeholder="t('emojiluna.urlPlaceholder')"
-                            @input="handleUrlChange" />
-                    </el-form-item>
-
-                    <el-form-item label="预览" v-if="urlPreview">
-                        <div class="url-preview">
-                            <img :src="urlForm.url" alt="URL Preview" class="preview-image" @error="handleUrlError" />
+            <!-- File Upload Mode -->
+            <div v-if="activeTab === 'upload'" class="mode-content fade-in">
+                <!-- Upload Area -->
+                <div class="upload-area-wrapper">
+                     <el-upload
+                        v-model:file-list="fileList"
+                        action="#"
+                        list-type="picture-card"
+                        :auto-upload="false"
+                        multiple
+                        accept="image/*"
+                        class="custom-uploader"
+                    >
+                        <div class="upload-trigger-content">
+                            <div class="upload-icon-circle">
+                                <el-icon><Plus /></el-icon>
+                            </div>
+                            <div class="upload-text">{{ t('emojiluna.dragOrClick') }}</div>
                         </div>
-                    </el-form-item>
-                </el-form>
-            </el-tab-pane>
-        </el-tabs>
+                    </el-upload>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">{{ t('emojiluna.category') }}</label>
+                        <el-select
+                            v-model="form.category"
+                            :placeholder="t('emojiluna.category')"
+                            style="width: 100%"
+                            filterable
+                            allow-create
+                            default-first-option
+                        >
+                            <el-option
+                                v-for="category in categories"
+                                :key="category.name"
+                                :label="category.name"
+                                :value="category.name"
+                            />
+                        </el-select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">{{ t('emojiluna.tags.default') }}</label>
+                        <el-select
+                            v-model="form.tags"
+                            :placeholder="t('emojiluna.tags.default')"
+                            style="width: 100%"
+                            multiple
+                            filterable
+                            allow-create
+                            default-first-option
+                            collapse-tags
+                            collapse-tags-tooltip
+                        >
+                            <el-option
+                                v-for="tag in allTags"
+                                :key="tag"
+                                :label="tag"
+                                :value="tag"
+                            />
+                        </el-select>
+                    </div>
+                </div>
+
+                <div class="ai-switch-wrapper" :class="{ active: form.aiAnalysis }">
+                    <div class="ai-content">
+                        <div class="ai-icon-box">
+                            <el-icon><MagicStick /></el-icon>
+                        </div>
+                        <div class="ai-text">
+                            <div class="ai-title">{{ t('emojiluna.aiAnalysis') }}</div>
+                            <div class="ai-desc">{{ t('emojiluna.aiAnalysisDesc') }}</div>
+                        </div>
+                    </div>
+                    <el-switch v-model="form.aiAnalysis" />
+                </div>
+            </div>
+
+            <!-- URL Mode -->
+            <div v-else class="mode-content fade-in">
+                <div class="form-group">
+                    <label class="form-label required">{{ t('emojiluna.imageUrl') }}</label>
+                     <el-input
+                        v-model="urlForm.url"
+                        :placeholder="t('emojiluna.enterImageUrl')"
+                        @input="handleUrlChange"
+                        clearable
+                    >
+                        <template #prefix>
+                            <el-icon><Link /></el-icon>
+                        </template>
+                    </el-input>
+                </div>
+
+                <!-- Preview -->
+                <div class="url-preview-container" :class="{ 'has-image': urlPreview }">
+                    <img
+                        v-if="urlPreview"
+                        :src="urlForm.url"
+                        class="preview-image"
+                        @error="handleUrlError"
+                    />
+                    <div v-else class="preview-placeholder">
+                        <div class="placeholder-icon">
+                            <el-icon><Picture /></el-icon>
+                        </div>
+                        <span>{{ t('emojiluna.previewArea') }}</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label required">{{ t('emojiluna.emojiName') }}</label>
+                    <el-input v-model="urlForm.name" :placeholder="t('emojiluna.enterEmojiName')" />
+                </div>
+
+                 <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">{{ t('emojiluna.category') }}</label>
+                        <el-select
+                            v-model="urlForm.category"
+                            :placeholder="t('emojiluna.category')"
+                            style="width: 100%"
+                            filterable
+                            allow-create
+                            default-first-option
+                        >
+                            <el-option
+                                v-for="category in categories"
+                                :key="category.name"
+                                :label="category.name"
+                                :value="category.name"
+                            />
+                        </el-select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">{{ t('emojiluna.tags.default') }}</label>
+                        <el-select
+                            v-model="urlForm.tags"
+                            :placeholder="t('emojiluna.tags.default')"
+                            style="width: 100%"
+                            multiple
+                            filterable
+                            allow-create
+                            default-first-option
+                            collapse-tags
+                            collapse-tags-tooltip
+                        >
+                            <el-option
+                                v-for="tag in allTags"
+                                :key="tag"
+                                :label="tag"
+                                :value="tag"
+                            />
+                        </el-select>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <template #footer>
-            <span class="dialog-footer">
-                <el-button type="primary" @click="handleSubmit" :loading="loading" :disabled="!canSubmit">
+            <div class="dialog-footer">
+                <el-button @click="handleClose" class="cancel-btn">{{ t('common.cancel') }}</el-button>
+                <el-button
+                    type="primary"
+                    @click="handleSubmit"
+                    :loading="loading"
+                    :disabled="!canSubmit"
+                    class="submit-btn"
+                >
                     {{ t('common.add') }}
                 </el-button>
-                <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
-            </span>
+            </div>
         </template>
     </el-dialog>
 </template>
@@ -93,7 +215,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { send } from '@koishijs/client'
 import { ElMessage, type UploadUserFile } from 'element-plus'
-import { UploadFilled, Plus, QuestionFilled } from '@element-plus/icons-vue'
+import { UploadFilled, Plus, QuestionFilled, Link, MagicStick, Picture } from '@element-plus/icons-vue'
 import type { Category, EmojiAddOptions } from 'koishi-plugin-emojiluna'
 
 interface Props {
@@ -289,27 +411,259 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.url-preview {
+.dialog-content {
+    padding: 0 4px;
+}
+
+/* Mode Switcher */
+.mode-switcher {
+    display: flex;
+    background: var(--k-color-surface-2);
+    padding: 4px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    gap: 4px;
+}
+
+.mode-item {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--k-text-light);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid transparent;
+}
+
+.mode-item:hover {
+    color: var(--k-color-text);
+    background: color-mix(in srgb, var(--k-color-surface-1), transparent 50%);
+}
+
+.mode-item.active {
+    background: var(--k-color-surface-1);
+    color: var(--k-color-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    font-weight: 600;
+    border-color: var(--k-color-border);
+}
+
+.mode-icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+/* Upload Styles */
+.upload-area-wrapper {
+    margin-bottom: 24px;
+}
+
+.custom-uploader :deep(.el-upload--picture-card) {
+    width: 100%;
+    height: 180px; /* Taller */
+    border-radius: 16px; /* More rounded */
+    border: 2px dashed var(--k-color-divider);
+    background: var(--k-color-surface-1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.custom-uploader :deep(.el-upload--picture-card:hover) {
+    border-color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 96%);
+}
+
+.upload-trigger-content {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
+    gap: 16px;
+    color: var(--k-text-light);
+    width: 100%;
+    height: 100%;
+}
+
+.upload-icon-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--k-color-surface-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: var(--k-color-primary);
+    transition: transform 0.3s ease;
+}
+
+.custom-uploader :deep(.el-upload--picture-card:hover) .upload-icon-circle {
+    transform: scale(1.1);
+    background: var(--k-color-primary);
+    color: white;
+}
+
+.upload-text {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* Form Styles */
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--k-text-light);
+}
+
+.form-label.required::after {
+    content: '*';
+    color: var(--k-color-danger);
+    margin-left: 4px;
+}
+
+/* AI Switch */
+.ai-switch-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--k-color-surface-1);
+    padding: 16px 20px;
+    border-radius: 16px;
+    border: 1px solid var(--k-color-divider);
+    transition: all 0.3s ease;
+    margin-top: 8px;
+}
+
+.ai-switch-wrapper.active {
+    border-color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 98%);
+}
+
+.ai-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.ai-icon-box {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 20px;
+    box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
+}
+
+.ai-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ai-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--k-color-text);
+}
+
+.ai-desc {
+    font-size: 12px;
+    color: var(--k-text-light);
+}
+
+/* URL Preview */
+.url-preview-container {
+    width: 100%;
+    height: 180px;
+    border-radius: 16px;
+    background: var(--k-color-surface-1);
+    border: 2px dashed var(--k-color-divider);
+    margin-bottom: 24px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.url-preview-container.has-image {
+    border-style: solid;
+    border-color: var(--k-color-divider);
+    background: transparent;
 }
 
 .preview-image {
-    max-width: 100px;
-    max-height: 100px;
-    object-fit: cover;
-    border-radius: 8px;
-    border: 1px solid var(--k-border-color);
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 12px;
 }
 
+.preview-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: var(--k-text-light);
+}
+
+.placeholder-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--k-color-surface-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+
+/* Footer */
 .dialog-footer {
     display: flex;
-    gap: 10px;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 10px;
 }
 
-:deep(.el-tabs__content) {
-    padding-top: 20px;
+/* Animations */
+.fade-in {
+    animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 </style>

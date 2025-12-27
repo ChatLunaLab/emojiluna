@@ -1,71 +1,92 @@
 <template>
-  <k-layout>
-    <el-scrollbar>
-      <div class="dashboard">
-       
+    <k-layout>
+        <div class="dashboard-container">
+            <!-- Main Content Area -->
+            <div class="main-content">
+                <el-scrollbar>
+                    <div class="content-wrapper">
+                        <Transition name="fade-slide" mode="out-in">
+                            <div
+                                v-if="activeTab === 'emojis'"
+                                key="emojis"
+                                class="view-container"
+                            >
+                                <EmojiManager />
+                            </div>
 
-        <!-- 标签栏 -->
-        <div class="dashboard-tabs-container">
-          <el-tabs 
-            v-model="activeTab" 
-            type="card" 
-            class="dashboard-tabs"
-          
-          >
-            <!-- 表情包管理 -->
-            <el-tab-pane name="emojis">
-              <template #label>
-                <span class="tab-label">
-                  <el-icon><Picture /></el-icon>
-                  {{ t('emojiluna.tabs.emojis') }}
-                </span>
-              </template>
-              <div class="tab-content">
-                <EmojiManager 
-                />
-              </div>
-            </el-tab-pane>
+                            <div
+                                v-else-if="activeTab === 'categories'"
+                                key="categories"
+                                class="view-container"
+                            >
+                                <CategoryDetail
+                                    v-if="showCategoryDetail"
+                                    :category="currentCategory"
+                                    @back="handleBackToCategories"
+                                />
+                                <CategoriesManager
+                                    v-else
+                                    @category-click="handleCategoryClick"
+                                />
+                            </div>
 
-            <!-- 标签管理 -->
-            <el-tab-pane name="tags">
-              <template #label>
-                <span class="tab-label">
-                  <el-icon><PriceTag /></el-icon>
-                  {{ t('emojiluna.tabs.tags') }}
-                </span>
-              </template>
-              <div class="tab-content">
-                <TagsManager />
-              </div>
-            </el-tab-pane>
+                            <div
+                                v-else-if="activeTab === 'tags'"
+                                key="tags"
+                                class="view-container"
+                            >
+                                <TagDetail
+                                    v-if="showTagDetail"
+                                    :tag-name="currentTag"
+                                    @back="handleBackToTags"
+                                />
+                                <TagsManager
+                                    v-else
+                                    @tag-click="handleTagClick"
+                                />
+                            </div>
+                        </Transition>
+                    </div>
+                </el-scrollbar>
+            </div>
 
-            <!-- 分类管理 -->
-            <el-tab-pane name="categories">
-              <template #label>
-                <span class="tab-label">
-                  <el-icon><FolderOpened /></el-icon>
-                  {{ t('emojiluna.tabs.categories') }}
-                </span>
-              </template>
-              <div class="tab-content">
-                <!-- 分类详情页面 -->
-                <CategoryDetail
-                  v-if="showCategoryDetail"
-                  :category="currentCategory"
-                  @back="handleBackToCategories"
-                />
-                <!-- 分类管理页面 -->
-                <CategoriesManager
-                  v-else
-                  @category-click="handleCategoryClick"
-                />
-              </div>
-            </el-tab-pane>
-          </el-tabs>
+            <!-- Side Navigation Bar (Floating) -->
+            <div class="side-nav">
+                <div class="nav-segment">
+                    <div
+                        class="nav-item"
+                        :class="{ active: activeTab === 'emojis' }"
+                        @click="handleTabChange('emojis')"
+                    >
+                        <el-icon :size="24"><Picture /></el-icon>
+                        <span class="nav-label">
+                            {{ t('emojiluna.tabs.emojis') }}
+                        </span>
+                    </div>
+                    <div
+                        class="nav-item"
+                        :class="{ active: activeTab === 'categories' }"
+                        @click="handleTabChange('categories')"
+                    >
+                        <el-icon :size="24"><FolderOpened /></el-icon>
+                        <span class="nav-label">
+                            {{ t('emojiluna.tabs.categories') }}
+                        </span>
+                    </div>
+                    <div
+                        class="nav-item"
+                        :class="{ active: activeTab === 'tags' }"
+                        @click="handleTabChange('tags')"
+                    >
+                        <el-icon :size="24"><PriceTag /></el-icon>
+                        <span class="nav-label">
+                            {{ t('emojiluna.tabs.tags') }}
+                        </span>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-    </el-scrollbar>
-  </k-layout>
+    </k-layout>
 </template>
 
 <script setup lang="ts">
@@ -76,185 +97,204 @@ import EmojiManager from './components/EmojiManager.vue'
 import TagsManager from './components/TagsManager.vue'
 import CategoriesManager from './components/CategoriesManager.vue'
 import CategoryDetail from './components/CategoryDetail.vue'
+import TagDetail from './components/TagDetail.vue'
 import Emoji from './icons/emoji.vue'
 import type { Category } from 'koishi-plugin-emojiluna'
 
 const { t } = useI18n()
 
-// 当前活动的标签页
+// Navigation state
 const activeTab = ref('emojis')
 
-// 分类详情页面状态
+// Category detail state
 const showCategoryDetail = ref(false)
 const currentCategory = ref<Category | null>(null)
 
-// 处理分类点击事件
+// Tag detail state
+const showTagDetail = ref(false)
+const currentTag = ref('')
+
+const handleTabChange = (tab: string) => {
+    activeTab.value = tab
+}
+
 const handleCategoryClick = (category: Category) => {
-  currentCategory.value = category
-  showCategoryDetail.value = true
+    currentCategory.value = category
+    showCategoryDetail.value = true
 }
 
-// 返回分类管理页面
 const handleBackToCategories = () => {
-  showCategoryDetail.value = false
-  currentCategory.value = null
+    showCategoryDetail.value = false
+    currentCategory.value = null
 }
 
-// 监听标签页切换，重置分类详情状态
+const handleTagClick = (tag: string) => {
+    currentTag.value = tag
+    showTagDetail.value = true
+}
+
+const handleBackToTags = () => {
+    showTagDetail.value = false
+    currentTag.value = ''
+}
+
 watch(activeTab, (newTab) => {
-  if (newTab !== 'categories') {
-    handleBackToCategories()
-  }
+    if (newTab !== 'categories') {
+        handleBackToCategories()
+    }
+    if (newTab !== 'tags') {
+        handleBackToTags()
+    }
 })
-
-
-
 </script>
 
 <style scoped>
-.dashboard {
-  min-height: 100vh;
+.dashboard-container {
+    position: relative;
+    height: 100vh;
+    background-color: var(--k-color-base);
+    color: var(--k-color-text);
+    overflow: hidden;
 }
 
-
-.dashboard-tabs-container {
-  padding: 0 32px;
+.main-content {
+    height: 100%;
+    width: 100%;
 }
 
-.dashboard-tabs {
-  overflow: hidden;
-  box-shadow: var(--k-card-shadow);
+.content-wrapper {
+    padding: 24px 80px 24px 24px; /* Right padding to avoid overlap with floating nav */
+    max-width: 1600px;
+    margin: 0 auto;
 }
 
-.dashboard-tabs :deep(.el-tabs__header) {
-  margin: 0;
-  background: var(--k-card-bg);
-  border-bottom: 1px solid var(--k-color-divider);
+.view-container {
+    min-height: 500px;
 }
 
-.dashboard-tabs :deep(.el-tabs__nav) {
-  border: none;
-}
-
-.dashboard-tabs :deep(.el-tabs__item) {
-  border: none;
-  border-radius: 0;
-  padding: 16px 24px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--k-text-normal);
-  background: var(--k-card-bg);
-  transition: all 0.3s ease;
-}
-
-.dashboard-tabs :deep(.el-tabs__item:hover) {
-  color: var(--k-color-primary);
-  background: var(--k-hover-bg);
-}
-
-.dashboard-tabs :deep(.el-tabs__item.is-active) {
-  color: var(--k-color-primary);
-  background: var(--k-activity-bg);
-  border-bottom: 2px solid var(--k-color-primary);
-}
-
-.dashboard-tabs :deep(.el-tabs__content) {
-  background: var(--k-card-bg);
-  min-height: 600px;
-}
-
-.tab-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.tab-content {
-  padding: 24px;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .dashboard-header {
-    padding: 20px 16px;
-  }
-
-  .header-content {
-    flex-direction: column;
-    text-align: center;
-    gap: 12px;
-  }
-
-  .header-icon {
-    width: 56px;
-    height: 56px;
-  }
-
-  .header-text h1 {
-    font-size: 24px;
-  }
-
-  .dashboard-tabs-container {
-    padding: 0 16px;
-  }
-
-  .dashboard-tabs :deep(.el-tabs__item) {
-    padding: 12px 16px;
-    font-size: 13px;
-  }
-
-  .tab-content {
-    padding: 16px;
-  }
-}
-
-@media (max-width: 480px) {
-  .dashboard-header {
-    padding: 16px 12px;
-  }
-
-  .header-icon {
-    width: 48px;
-    height: 48px;
-  }
-
-  .header-text h1 {
-    font-size: 20px;
-  }
-
-  .dashboard-tabs-container {
-    padding: 0 12px;
-  }
-
-  .dashboard-tabs :deep(.el-tabs__item) {
-    padding: 10px 12px;
-    font-size: 12px;
-  }
-
-  .tab-label {
-    gap: 4px;
-  }
-
-  .tab-content {
+/* Side Navigation (Floating) */
+.side-nav {
+    position: fixed;
+    right: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: color-mix(in srgb, var(--k-color-surface-1), transparent 20%);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--k-color-divider);
+    border-radius: 16px;
     padding: 12px;
-  }
+    z-index: 100;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 42px; /* Collapsed width */
+    overflow: hidden;
 }
 
-/* 自定义滚动条 */
-:deep(.el-scrollbar__wrap) {
-  overflow-x: hidden;
+.side-nav:hover {
+    width: 180px; /* Expanded width */
 }
 
-:deep(.el-scrollbar__bar) {
-  border-radius: 4px;
+.nav-segment {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
-:deep(.el-scrollbar__thumb) {
-  background: rgba(144, 147, 153, 0.3);
-  border-radius: 4px;
+.nav-item {
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px; /* Inner padding */
+    cursor: pointer;
+    color: var(--k-text-light);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    position: relative;
 }
 
-:deep(.el-scrollbar__thumb:hover) {
-  background: rgba(144, 147, 153, 0.5);
+.nav-item:hover {
+    background-color: var(--k-hover-bg);
+    color: var(--k-color-text);
+}
+
+.nav-item.active {
+    background-color: var(--k-color-primary);
+    color: white;
+    box-shadow: 0 2px 8px rgba(var(--k-color-primary-rgb), 0.3);
+}
+
+.nav-item .el-icon {
+    flex-shrink: 0;
+    /* Center the icon when collapsed */
+    margin: 0 auto;
+    transition: margin 0.3s ease;
+}
+
+.side-nav:hover .nav-item .el-icon {
+    /* When expanded, icon moves to left (via flex gap/margin reset) */
+    margin: 0;
+    margin-right: 12px;
+}
+
+.nav-label {
+    opacity: 0;
+    transform: translateX(10px);
+    transition: all 0.3s ease;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.side-nav:hover .nav-label {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .content-wrapper {
+        padding: 16px;
+        padding-bottom: 80px; /* Space for bottom nav */
+    }
+
+    .side-nav {
+        top: auto;
+        bottom: 20px;
+        right: 50%;
+        transform: translateX(50%);
+        width: auto;
+        flex-direction: row;
+        padding: 8px 16px;
+        border-radius: 30px; /* Pill shape on mobile */
+    }
+
+    .side-nav:hover {
+        width: auto; /* No expansion on hover for mobile usually */
+    }
+
+    .nav-segment {
+        flex-direction: row;
+        gap: 20px;
+    }
+
+    .nav-item {
+        padding: 0;
+        height: auto;
+        background: transparent !important; /* Remove background on mobile items */
+        box-shadow: none !important;
+        color: var(--k-text-light);
+    }
+
+    .nav-item.active {
+        color: var(--k-color-primary);
+    }
+
+    .nav-label {
+        display: none;
+    }
+
+    .nav-item .el-icon {
+        margin: 0;
+    }
 }
 </style>

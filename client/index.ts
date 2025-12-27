@@ -2,7 +2,6 @@ import { Context, icons } from '@koishijs/client'
 import DashboardView from './dashboard.vue'
 import { i18n } from './i18n'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
-import { h } from 'vue'
 import 'virtual:uno.css'
 import type {} from 'koishi-plugin-emojiluna'
 import Emoji from './icons/emoji.vue'
@@ -13,7 +12,7 @@ viewportMeta.content = 'width=device-width, initial-scale=1'
 document.head.appendChild(viewportMeta)
 
 const createIconComponent = (IconComponent: typeof ElementPlusIconsVue.Aim) => {
-    return () => h(IconComponent)
+    return () => IconComponent
 }
 
 icons.register('Emoji', Emoji)

@@ -1,192 +1,98 @@
 <template>
   <div class="categories-manager">
-    <!-- 分类统计卡片 -->
-    <div class="stats-cards">
-      <el-card class="stat-card">
-        <div class="stat-content">
-          <div class="stat-icon">
-            <el-icon size="24" color="#409EFF">
-              <FolderOpened />
-            </el-icon>
-          </div>
-          <div class="stat-info">
-            <div class="stat-number">{{ categories.length }}</div>
-            <div class="stat-label">分类总数</div>
-          </div>
+    <!-- Toolbar -->
+    <div class="toolbar-container">
+      <div class="toolbar-main">
+        <div class="search-section">
+          <el-input
+            v-model="searchKeyword"
+            placeholder="搜索分类..."
+            class="search-input"
+            @keyup.enter="handleSearch"
+            clearable
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
         </div>
-      </el-card>
 
-      <el-card class="stat-card">
-        <div class="stat-content">
-          <div class="stat-icon">
-            <el-icon size="24" color="#67C23A">
-              <Picture />
-            </el-icon>
-          </div>
-          <div class="stat-info">
-            <div class="stat-number">{{ totalEmojis }}</div>
-            <div class="stat-label">表情包总数</div>
-          </div>
+        <div class="actions-section">
+          <el-button
+            type="primary"
+            circle
+            @click="showAddDialog = true"
+            :title="t('emojiluna.addCategory')"
+          >
+            <el-icon><Plus /></el-icon>
+          </el-button>
+          <el-button
+            circle
+            @click="refreshData"
+            :title="t('common.refresh')"
+          >
+            <el-icon><RefreshRight /></el-icon>
+          </el-button>
         </div>
-      </el-card>
-
-      <el-card class="stat-card">
-        <div class="stat-content">
-          <div class="stat-icon">
-            <el-icon size="24" color="#E6A23C">
-              <DataAnalysis />
-            </el-icon>
-          </div>
-          <div class="stat-info">
-            <div class="stat-number">{{ averageEmojisPerCategory.toFixed(1) }}</div>
-            <div class="stat-label">平均每分类表情包数</div>
-          </div>
-        </div>
-      </el-card>
-    </div>
-
-    <!-- 操作栏 -->
-    <div class="action-bar">
-      <div class="search-bar">
-        <el-input
-          v-model="searchKeyword"
-          placeholder="搜索分类..."
-          size="large"
-          class="search-input"
-          @keyup.enter="filterCategories"
-          clearable
-        />
-        <el-button
-          type="primary"
-          size="large"
-          class="search-button"
-          @click="filterCategories"
-        >
-          <el-icon><Search /></el-icon>
-        </el-button>
-      </div>
-      <div class="action-buttons">
-        <el-button
-          type="primary"
-          size="large"
-          @click="showAddDialog = true"
-          class="add-button"
-        >
-          <el-icon><Plus /></el-icon>
-          添加分类
-        </el-button>
-        <el-button
-          circle
-          size="large"
-          class="refresh-action"
-          @click="() => { loadCategories(); loadCategoryEmojis(); }"
-          title="刷新"
-        >
-          <el-icon><RefreshRight /></el-icon>
-        </el-button>
       </div>
     </div>
 
-    <!-- 分类列表 -->
-    <div class="categories-content" v-loading="loading">
-      <div v-if="filteredCategories.length === 0" class="empty-state">
-        <el-empty description="暂无分类" />
-      </div>
-
-      <div v-else class="categories-grid">
+    <!-- Categories Grid -->
+    <div class="categories-grid-container" v-loading="loading">
+      <div v-if="filteredCategories.length > 0" class="categories-grid">
         <div
-          v-for="category in paginatedCategories"
+          v-for="category in filteredCategories"
           :key="category.id"
-          class="category-card"
+          class="album-card"
           @click="handleCategoryClick(category)"
         >
-          <div class="category-header">
-            <div class="category-title">
-              <h3>{{ category.name }}</h3>
-              <el-tag type="info" effect="plain" round>
-                {{ category.emojiCount }} 个表情包
-              </el-tag>
+          <div class="album-cover">
+            <img
+                v-if="categoryCovers[category.name]"
+                :src="getEmojiUrl(categoryCovers[category.name])"
+                class="cover-image"
+                loading="lazy"
+                @error="(e) => handleImageError(e)"
+            />
+            <div v-else class="cover-placeholder">
+                <el-icon :size="48"><FolderOpened /></el-icon>
             </div>
-            <div class="category-actions">
-              <el-button
-                size="small"
-                type="primary"
-                text
-                @click.stop="handleEditCategory(category)"
-                :icon="Edit"
-              />
-              <el-button
-                size="small"
-                type="danger"
-                text
-                @click.stop="handleDeleteCategory(category)"
-                :disabled="category.emojiCount > 0"
-                :icon="Delete"
-              />
+
+            <!-- Hover Actions -->
+            <div class="album-actions" @click.stop>
+                 <el-dropdown trigger="click" @command="(cmd) => handleCommand(cmd, category)">
+                    <div class="action-btn">
+                        <el-icon><MoreFilled /></el-icon>
+                    </div>
+                    <template #dropdown>
+                        <el-dropdown-menu>
+                            <el-dropdown-item command="edit">
+                                <el-icon><Edit /></el-icon>编辑
+                            </el-dropdown-item>
+                            <el-dropdown-item command="delete" class="danger-item" :disabled="category.emojiCount > 0">
+                                <el-icon><Delete /></el-icon>删除
+                            </el-dropdown-item>
+                        </el-dropdown-menu>
+                    </template>
+                 </el-dropdown>
             </div>
           </div>
-
-          <div class="category-description" v-if="category.description">
-            <p>{{ category.description }}</p>
-          </div>
-
-          <div class="category-meta">
-            <div class="created-date">
-              <el-icon size="14"><Calendar /></el-icon>
-              <span>创建于: {{ formatDate(category.createdAt) }}</span>
-            </div>
-          </div>
-
-          <!-- 表情包预览 -->
-          <div class="emoji-preview" v-if="categoryEmojis[category.name]?.length > 0">
-            <div class="emoji-preview-header">
-              <el-icon size="14"><Picture /></el-icon>
-              <span>表情包预览</span>
-            </div>
-            <div class="emoji-preview-grid">
-              <div
-                v-for="emoji in categoryEmojis[category.name].slice(0, 6)"
-                :key="emoji.id"
-                class="emoji-preview-item"
-              >
-                <img
-                  :src="`${baseUrl}/get/${emoji.name}`"
-                  :alt="emoji.name"
-                  :title="emoji.name"
-                  class="emoji-preview-img"
-                  @error="handleImageError"
-                />
-              </div>
-              <div
-                v-if="categoryEmojis[category.name].length > 6"
-                class="emoji-preview-more"
-              >
-                <span>+{{ categoryEmojis[category.name].length - 6 }}</span>
-              </div>
-            </div>
+          <div class="album-info">
+            <div class="album-name" :title="category.name">{{ category.name }}</div>
+            <div class="album-count">{{ category.emojiCount }} 项</div>
           </div>
         </div>
       </div>
-
-      <!-- 分页 -->
-      <div class="pagination-wrapper" v-if="filteredCategories.length > pageSize">
-        <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          :page-sizes="[9, 18, 27, 36]"
-          :total="filteredCategories.length"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleSizeChange"
-          @current-change="handleCurrentChange"
-        />
+       <div v-else class="no-data">
+        <el-empty description="暂无分类" />
       </div>
     </div>
 
-    <!-- 添加/编辑分类对话框 -->
+    <!-- Add/Edit Dialog -->
     <el-dialog
       v-model="showEditDialog"
       :title="editingCategory ? '编辑分类' : '添加分类'"
-      width="500px"
+      width="400px"
       :before-close="handleCloseDialog"
     >
       <el-form
@@ -195,7 +101,7 @@
         ref="categoryFormRef"
         label-width="80px"
       >
-        <el-form-item label="分类名称" prop="name">
+        <el-form-item label="名称" prop="name">
           <el-input
             v-model="categoryForm.name"
             placeholder="请输入分类名称"
@@ -204,7 +110,7 @@
           />
         </el-form-item>
 
-        <el-form-item label="分类描述" prop="description">
+        <el-form-item label="描述" prop="description">
           <el-input
             v-model="categoryForm.description"
             placeholder="请输入分类描述（可选）"
@@ -233,42 +139,33 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { send } from '@koishijs/client'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  Search,
-  Plus,
-  Edit,
-  Delete,
-  FolderOpened,
-  Picture,
-  DataAnalysis,
-  Calendar
-} from '@element-plus/icons-vue'
+import { Search, Plus, RefreshRight, FolderOpened, MoreFilled, Edit, Delete } from '@element-plus/icons-vue'
 import type { Category, EmojiItem } from 'koishi-plugin-emojiluna'
 import type { FormInstance, FormRules } from 'element-plus'
 
-// 定义 emit 事件
 const emit = defineEmits<{
-  categoryClick: [category: Category]
+  (e: 'category-click', category: Category): void
 }>()
 
-// 状态管理
+const { t } = useI18n()
+
+// State
 const loading = ref(false)
 const saving = ref(false)
 const categories = ref<Category[]>([])
-const categoryEmojis = ref<Record<string, EmojiItem[]>>({})
+const categoryCovers = ref<Record<string, EmojiItem>>({}) // Map category name to cover emoji
 const searchKeyword = ref('')
-const currentPage = ref(1)
-const pageSize = ref(9)
+const baseUrl = ref('/emojiluna')
 
-// 对话框状态
+// Dialog State
 const showAddDialog = ref(false)
 const showEditDialog = ref(false)
 const editingCategory = ref<Category | null>(null)
 const categoryFormRef = ref<FormInstance>()
-
 const categoryForm = reactive({
   name: '',
   description: ''
@@ -284,39 +181,36 @@ const categoryFormRules: FormRules = {
   ]
 }
 
-// 配置
-const baseUrl = computed(() => '/emojiluna')
-
-// 计算属性
-const totalEmojis = computed(() => {
-  return categories.value.reduce((sum, category) => sum + category.emojiCount, 0)
-})
-
-const averageEmojisPerCategory = computed(() => {
-  return categories.value.length > 0 ? totalEmojis.value / categories.value.length : 0
-})
-
+// Computed
 const filteredCategories = computed(() => {
   if (!searchKeyword.value.trim()) {
     return categories.value
   }
-  return categories.value.filter(category =>
-    category.name.toLowerCase().includes(searchKeyword.value.toLowerCase()) ||
-    (category.description && category.description.toLowerCase().includes(searchKeyword.value.toLowerCase()))
+  const keyword = searchKeyword.value.toLowerCase()
+  return categories.value.filter(cat =>
+    cat.name.toLowerCase().includes(keyword) ||
+    (cat.description && cat.description.toLowerCase().includes(keyword))
   )
 })
 
-const paginatedCategories = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  const end = start + pageSize.value
-  return filteredCategories.value.slice(start, end)
-})
-
-// 数据加载
+// Methods
 const loadCategories = async () => {
   loading.value = true
   try {
     categories.value = await send('emojiluna/getCategories') || []
+    baseUrl.value = await send('emojiluna/getBaseUrl') || '/emojiluna'
+
+    // Load covers
+    const promises = categories.value.map(async (cat) => {
+        if (cat.emojiCount > 0) {
+            const result = await send('emojiluna/getEmojiList', { category: cat.name, limit: 1 })
+            if (result && result.length > 0) {
+                categoryCovers.value[cat.name] = result[0]
+            }
+        }
+    })
+    await Promise.all(promises)
+
   } catch (error) {
     console.error('Failed to load categories:', error)
     ElMessage.error('加载分类失败')
@@ -325,53 +219,41 @@ const loadCategories = async () => {
   }
 }
 
-const loadCategoryEmojis = async () => {
-  try {
-    const promises = categories.value.map(async category => {
-      const emojis = await send('emojiluna/getEmojiList', { category: category.name })
-      return { categoryName: category.name, emojis: emojis || [] }
-    })
-
-    const results = await Promise.all(promises)
-    const emojiMap: Record<string, EmojiItem[]> = {}
-
-    results.forEach(result => {
-      emojiMap[result.categoryName] = result.emojis
-    })
-
-    categoryEmojis.value = emojiMap
-  } catch (error) {
-    console.error('Failed to load category emojis:', error)
-  }
+const refreshData = () => {
+    loadCategories()
 }
 
-// 工具函数
-const formatDate = (date: Date | string) => {
-  return new Date(date).toLocaleDateString('zh-CN')
+const handleSearch = () => {
+    // Client side filtering is enough for categories usually
+}
+
+const getEmojiUrl = (emoji: EmojiItem) => {
+    return `${baseUrl.value}/get/${emoji.name}`
 }
 
 const handleImageError = (event: Event) => {
-  const img = event.target as HTMLImageElement
-  img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMiAyMEM0Mi40IDIwIDQ0IDMwIDQ0IDMwQzQ0IDMwIDQyLjQgNDAgMzIgNDBDMjEuNiA0MCAyMCAzMCAyMCAzMEMyMCAzMCAyMS42IDIwIDMyIDIwWiIgZmlsbD0iI0NDQ0NDQyIvPgo8L3N2Zz4K'
-}
-
-// 事件处理
-const filterCategories = () => {
-  currentPage.value = 1
-}
-
-const handleSizeChange = (newSize: number) => {
-  pageSize.value = newSize
-  currentPage.value = 1
-}
-
-const handleCurrentChange = (newPage: number) => {
-  currentPage.value = newPage
+    const target = event.target as HTMLElement
+    target.style.display = 'none'
+    // Show placeholder sibling? CSS handles this via v-if/else logic or we can swap src
+    // Simpler: swap src to placeholder if we had one URL, but here we switch to div
+    // Actually the img v-if will handle "has cover", but if cover fails to load...
+    // Let's just set a transparent pixel or hide it to reveal background
+    // For now, simpler error handling in template logic is hard.
+    // Let's replace src with svg placeholder
+    const img = event.target as HTMLImageElement
+    img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMiAyMEM0Mi40IDIwIDQ0IDMwIDQ0IDMwQzQ0IDMwIDQyLjQgNDAgMzIgNDBDMjEuNiA0MCAyMCAzMCAyMCAzMEMyMCAzMCAyMS42IDIwIDMyIDIwWiIgZmlsbD0iI0NDQ0NDQyIvPgo8L3N2Zz4K'
 }
 
 const handleCategoryClick = (category: Category) => {
-  // 触发父组件事件，用于导航到分类详情页面
-  emit('categoryClick', category)
+    emit('category-click', category)
+}
+
+const handleCommand = (command: string, category: Category) => {
+    if (command === 'edit') {
+        handleEditCategory(category)
+    } else if (command === 'delete') {
+        handleDeleteCategory(category)
+    }
 }
 
 const handleEditCategory = (category: Category) => {
@@ -382,11 +264,6 @@ const handleEditCategory = (category: Category) => {
 }
 
 const handleDeleteCategory = async (category: Category) => {
-  if (category.emojiCount > 0) {
-    ElMessage.warning('该分类下还有表情包，无法删除')
-    return
-  }
-
   try {
     await ElMessageBox.confirm(
       `确定要删除分类 "${category.name}" 吗？`,
@@ -403,390 +280,205 @@ const handleDeleteCategory = async (category: Category) => {
     loadCategories()
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('Failed to delete category:', error)
-      ElMessage.error('删除分类失败')
+        console.error('Failed to delete category:', error)
+        ElMessage.error('删除失败：可能分类不为空')
     }
   }
 }
 
 const handleSaveCategory = async () => {
   if (!categoryFormRef.value) return
-
-  try {
-    await categoryFormRef.value.validate()
-  } catch {
-    return
-  }
-
-  saving.value = true
-  try {
-    if (editingCategory.value) {
-      ElMessage.info('编辑分类功能暂未实现')
-    } else {
-      await send('emojiluna/addCategory', categoryForm.name, categoryForm.description)
-      ElMessage.success('分类添加成功')
-    }
-
-    handleCloseDialog()
-    loadCategories()
-  } catch (error) {
-    console.error('Failed to save category:', error)
-    ElMessage.error('保存分类失败')
-  } finally {
-    saving.value = false
-  }
+  await categoryFormRef.value.validate(async (valid) => {
+      if (valid) {
+        saving.value = true
+        try {
+            if (editingCategory.value) {
+                 // API for update category not seen in backend.ts, assuming strictly add/delete?
+                 // Wait, backend.ts has 'addCategory', 'deleteCategory'.
+                 // Service.ts has addCategory but no updateCategoryName?
+                 // Let's check backend.ts again.
+                 // It has 'emojiluna/updateEmojiCategory' for moving emojis.
+                 // It does NOT seem to have 'updateCategory' for renaming the category itself.
+                 // So editing might be limited or require implementing a new backend method.
+                 // For now, I'll show a message.
+                 ElMessage.info('重命名分类功能暂未在后端实现')
+            } else {
+                await send('emojiluna/addCategory', categoryForm.name, categoryForm.description)
+                ElMessage.success('添加成功')
+                showEditDialog.value = false
+                refreshData()
+            }
+        } catch (error) {
+            console.error(error)
+            ElMessage.error('保存失败')
+        } finally {
+            saving.value = false
+        }
+      }
+  })
 }
 
 const handleCloseDialog = () => {
-  showEditDialog.value = false
-  showAddDialog.value = false
-  editingCategory.value = null
-  categoryForm.name = ''
-  categoryForm.description = ''
-  categoryFormRef.value?.resetFields()
-}
-
-// 监听添加对话框
-import { watch } from 'vue'
-watch(showAddDialog, (newValue) => {
-  if (newValue) {
+    showEditDialog.value = false
+    showAddDialog.value = false
     editingCategory.value = null
     categoryForm.name = ''
     categoryForm.description = ''
-    showEditDialog.value = true
-    showAddDialog.value = false
-  }
+}
+
+watch(showAddDialog, (val) => {
+    if (val) {
+        editingCategory.value = null
+        categoryForm.name = ''
+        categoryForm.description = ''
+        showEditDialog.value = true
+        showAddDialog.value = false
+    }
 })
 
-// 初始化
-onMounted(async () => {
-  await loadCategories()
-  await loadCategoryEmojis()
+onMounted(() => {
+    loadCategories()
 })
 </script>
 
 <style scoped>
 .categories-manager {
-  padding: 0;
+  min-height: 100%;
 }
 
-.stats-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
+.toolbar-container {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--k-color-base);
+  padding: 12px 0;
+  margin-bottom: 12px;
 }
 
-.stat-card {
-  border: 1px solid var(--k-card-border);
-  border-radius: 6px;
-  background: var(--k-card-bg);
-}
-
-.stat-card:hover {
-  border-color: var(--k-color-primary);
-}
-
-.stat-content {
+.toolbar-main {
   display: flex;
-  align-items: center;
   gap: 12px;
-  padding: 16px;
-}
-
-.stat-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
-  background: var(--k-hover-bg);
-}
-
-.stat-info {
-  flex: 1;
-}
-
-.stat-number {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--k-text-dark);
-  margin-bottom: 2px;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: var(--k-text-light);
-}
-
-.action-bar {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 24px;
   align-items: center;
 }
 
-
-.search-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.search-section {
   flex: 1;
   max-width: 400px;
 }
 
-.search-input {
-  flex: 1;
-}
-
 .search-input :deep(.el-input__wrapper) {
-  background: var(--k-hover-bg);
+  border-radius: 20px;
+  background-color: var(--k-color-surface-1);
+  box-shadow: none !important;
+  border: 1px solid transparent;
 }
 
-.search-button {
-  padding: 12px 24px;
-  font-weight: 600;
-  margin-left: 0;
+.search-input :deep(.el-input__wrapper:hover),
+.search-input :deep(.el-input__wrapper.is-focus) {
+    background-color: var(--k-color-surface-2);
 }
 
-.search-button:hover {
-  background: var(--k-hover-bg);
-}
-
-.action-buttons {
+.actions-section {
   display: flex;
-  gap: 12px;
-  margin-left: auto;
-}
-
-.add-button {
-  padding: 12px 24px;
-  font-weight: 600;
-}
-
-.add-button:hover {
-  background: var(--k-hover-bg);
-  color: var(--k-color-primary);
-}
-
-.refresh-action {
-}
-
-.refresh-action:hover {
-  background: var(--k-hover-bg);
-  color: var(--k-color-primary);
-}
-
-.categories-content {
-  min-height: 400px;
-}
-
-.empty-state {
-  display: flex;
-  justify-content: center;
+  gap: 8px;
   align-items: center;
-  min-height: 400px;
+  margin-left: auto;
 }
 
 .categories-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 20px;
-  margin-bottom: 24px;
+  padding-bottom: 40px;
 }
 
-.category-card {
-  border: 1px solid var(--k-card-border);
-  border-radius: 6px;
-  padding: 20px;
-  background: var(--k-card-bg);
+.album-card {
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.2s;
 }
 
-.category-card:hover {
-  border-color: var(--k-color-primary);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+.album-card:hover {
+    transform: translateY(-4px);
 }
 
-.category-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 16px;
-}
-
-.category-title {
-  flex: 1;
-}
-
-.category-title h3 {
-  margin: 0 0 8px 0;
-  color: var(--k-text-dark);
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.category-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.category-description {
-  margin-bottom: 16px;
-  color: var(--k-text-normal);
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.category-description p {
-  margin: 0;
-}
-
-.category-meta {
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #f0f2f5;
-}
-
-.created-date {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--k-text-light);
-}
-
-.emoji-preview {
-  margin-top: 16px;
-}
-
-.emoji-preview-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 12px;
-  font-size: 14px;
-  color: var(--k-text-normal);
-  font-weight: 500;
-}
-
-.emoji-preview-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  max-width: 200px;
-}
-
-.emoji-preview-item {
-  position: relative;
-  width: 48px;
-  height: 48px;
-  border-radius: 4px;
-  overflow: hidden;
-  border: 1px solid var(--k-border-color);
-}
-
-.emoji-preview-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.emoji-preview-more {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 4px;
-  background: var(--k-color-surface-1);
-  border: 1px solid var(--k-border-color);
-  font-size: 12px;
-  color: var(--k-text-light);
-  font-weight: 500;
-}
-
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 24px;
-}
-
-.dialog-footer {
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .categories-manager {
-    padding: 0;
-  }
-
-  .stats-cards {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .action-bar {
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .search-section {
-    max-width: none;
+.album-cover {
     width: 100%;
-  }
-
-  .action-buttons {
-    width: 100%;
-  }
-
-  .action-buttons .el-button {
-    flex: 1;
-  }
-
-  .categories-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .category-header {
-    flex-direction: column;
-    gap: 12px;
-    align-items: stretch;
-  }
-
-  .category-actions {
+    aspect-ratio: 1;
+    border-radius: 12px;
+    background-color: var(--k-color-surface-2);
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
     justify-content: center;
-  }
 }
 
-@media (max-width: 480px) {
-  .category-card {
-    padding: 16px;
-  }
+.cover-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
 
-  .stat-content {
-    gap: 12px;
-  }
+.cover-placeholder {
+    color: var(--k-text-light);
+}
 
-  .stat-icon {
-    width: 40px;
-    height: 40px;
-  }
+.album-info {
+    padding: 0 4px;
+}
 
-  .stat-number {
-    font-size: 20px;
-  }
+.album-name {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--k-color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
 
-  .emoji-preview-grid {
-    max-width: none;
+.album-count {
+    font-size: 13px;
+    color: var(--k-text-light);
+}
+
+.album-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.album-card:hover .album-actions {
+    opacity: 1;
+}
+
+.action-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background-color: rgba(255,255,255,0.9);
+    display: flex;
+    align-items: center;
     justify-content: center;
-  }
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    color: var(--k-color-text);
+}
+
+.action-btn:hover {
+    background-color: white;
+    color: var(--k-color-primary);
+}
+
+.danger-item {
+    color: var(--el-color-danger);
+}
+
+.no-data {
+    margin-top: 40px;
 }
 </style>

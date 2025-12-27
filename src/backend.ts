@@ -11,7 +11,7 @@ export async function applyBackend(ctx: Context, config: Config) {
             .getEmojiList()
             .then((res) => res.map((emoji) => `[${emoji.name}](${emoji.path})`))
         ctx.effect(() => {
-            const dispose = ctx.chatluna.variable.setVariable(
+            const dispose = ctx.chatluna.promptRenderer.setVariable(
                 'emojis',
                 emojis.join(',')
             )
