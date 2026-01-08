@@ -8,7 +8,7 @@ import { getImageType } from './utils'
 
 export async function applyBackend(ctx: Context, config: Config) {
     if (config.injectVariables) {
-        ctx.inject(['server', 'chatluna'], async (ctx) => {
+        ctx.inject(['server', 'chatluna', 'emojiluna'], async (ctx) => {
             const selfUrl = config.selfUrl || ctx.server.selfUrl || ''
             const baseUrl = selfUrl + config.backendPath
 

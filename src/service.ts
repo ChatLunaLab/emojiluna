@@ -44,8 +44,10 @@ export class EmojiLunaService extends Service {
     ) {
         super(ctx, 'emojiluna', true)
         defineDatabase(ctx)
-        this.initializeStorage()
-        this.initializeAI()
+        ctx.on('ready', async () => {
+            await this.initializeStorage()
+            await this.initializeAI()
+        })
     }
 
     private async initializeStorage() {
@@ -60,10 +62,8 @@ export class EmojiLunaService extends Service {
             await fs.mkdir(storageDir, { recursive: true })
         }
 
-        this.ctx.on('ready', async () => {
-            await this.loadEmojis()
-            await this.loadCategories()
-        })
+        await this.loadEmojis()
+        await this.loadCategories()
 
         this.ctx.on('dispose', () => {
             this._emojiStorage = {}
