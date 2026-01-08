@@ -12,6 +12,8 @@ export async function applyBackend(ctx: Context, config: Config) {
             const selfUrl = config.selfUrl || ctx.server.selfUrl || ''
             const baseUrl = selfUrl + config.backendPath
 
+            await ctx.emojiluna.ready
+
             const emojis = await ctx.emojiluna.getEmojiList({
                 limit: 100000
             })
@@ -42,7 +44,9 @@ export async function applyBackend(ctx: Context, config: Config) {
         return
     }
 
-    ctx.inject(['console', 'server'], (ctx) => {
+    ctx.inject(['console', 'server', 'emojiluna'], async (ctx) => {
+        await ctx.emojiluna.ready
+
         ctx.console.addEntry({
             dev: resolve(__dirname, '../client/index.ts'),
             prod: resolve(__dirname, '../dist')
@@ -230,7 +234,9 @@ export async function applyBackend(ctx: Context, config: Config) {
         )
     })
 
-    ctx.inject(['server'], (ctx) => {
+    ctx.inject(['server', 'emojiluna'], async (ctx) => {
+        await ctx.emojiluna.ready
+
         ctx.server.get(`${config.backendPath}/list`, async (koa) => {
             const emojis = await ctx.emojiluna.getEmojiList()
 

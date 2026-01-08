@@ -37,6 +37,9 @@ export class EmojiLunaService extends Service {
     private _emojiStorage: Record<string, EmojiItem> = {}
     private _categories: Record<string, Category> = {}
     private _model: ComputedRef<ChatLunaChatModel> | null = null
+    private _isInitialized = false
+    private _readyPromise: Promise<void>
+    private _readyResolve: () => void
 
     constructor(
         ctx: Context,
@@ -44,10 +47,19 @@ export class EmojiLunaService extends Service {
     ) {
         super(ctx, 'emojiluna', true)
         defineDatabase(ctx)
+        this._readyPromise = new Promise((resolve) => {
+            this._readyResolve = resolve
+        })
         ctx.on('ready', async () => {
             await this.initializeStorage()
             await this.initializeAI()
+            this._isInitialized = true
+            this._readyResolve()
         })
+    }
+
+    get ready(): Promise<void> {
+        return this._readyPromise
     }
 
     private async initializeStorage() {
@@ -70,6 +82,10 @@ export class EmojiLunaService extends Service {
             this._categories = {}
             this._model = null
         })
+    }
+
+    public get isInitialized(): boolean {
+        return this._isInitialized
     }
 
     public async initializeAI() {
