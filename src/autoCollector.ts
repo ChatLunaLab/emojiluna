@@ -212,7 +212,7 @@ export class AutoCollector {
             if (images.length === 0) return
 
             if (!(await this.checkHitLimit(session))) {
-                this.ctx.logger.debug(
+                this.ctx.logger.info(
                     `Hit auto collect limit for group ${session.guildId || session.channelId}`
                 )
                 return
@@ -287,19 +287,19 @@ export class AutoCollector {
             const frequency = this.trackImageFrequency(imageInfo.hash, groupId)
 
             if (frequency < this.options.emojiFrequencyThreshold) {
-                this.ctx.logger.debug(
+                this.ctx.logger.info(
                     `Image frequency too low: ${frequency}/${this.options.emojiFrequencyThreshold}`
                 )
                 return
             }
 
             if (this.emojiHashes.has(imageInfo.hash)) {
-                this.ctx.logger.debug('Duplicate image detected, skipping')
+                this.ctx.logger.info('Duplicate image detected, skipping')
                 return
             }
 
             if (await this.isSimilarToExisting(imageInfo)) {
-                this.ctx.logger.debug('Similar image detected, skipping')
+                this.ctx.logger.info('Similar image detected, skipping')
                 return
             }
 
@@ -311,12 +311,12 @@ export class AutoCollector {
 
                 if (filterResult) {
                     if (!filterResult.isAcceptable) {
-                        this.ctx.logger.debug(
+                        this.ctx.logger.warn(
                             `Image rejected by AI filter: type=${filterResult.imageType}, reason=${filterResult.reason}`
                         )
                         return
                     }
-                    this.ctx.logger.debug(
+                    this.ctx.logger.warn(
                         `Image accepted by AI filter: type=${filterResult.imageType}, confidence=${filterResult.confidence}`
                     )
                 }
@@ -356,14 +356,14 @@ export class AutoCollector {
         const sizeMB = sizeKB / 1024
 
         if (sizeKB < this.options.minSize) {
-            this.ctx.logger.debug(
+            this.ctx.logger.info(
                 `Image too small: ${sizeKB.toFixed(2)}KB < ${this.options.minSize}KB`
             )
             return false
         }
 
         if (sizeMB > this.options.maxSize) {
-            this.ctx.logger.debug(
+            this.ctx.logger.info(
                 `Image too large: ${sizeMB.toFixed(2)}MB > ${this.options.maxSize}MB`
             )
             return false
@@ -388,11 +388,7 @@ export class AutoCollector {
         const frames: FrameFeatures[] = []
 
         for (const index of frameIndices) {
-            const frame = await extractFrameRgba(
-                buffer,
-                imageMetadata,
-                index
-            )
+            const frame = await extractFrameRgba(buffer, imageMetadata, index)
             const hashPixels = await resizeFrameToGrayscale(
                 frame,
                 AutoCollector.HASH_WIDTH,
@@ -450,9 +446,7 @@ export class AutoCollector {
     }
 
     private calculateHistogramFromPixels(pixels: Uint8Array): number[] {
-        const histogram = new Array(
-            AutoCollector.HISTOGRAM_BINS
-        ).fill(0)
+        const histogram = new Array(AutoCollector.HISTOGRAM_BINS).fill(0)
         const binSize = 256 / AutoCollector.HISTOGRAM_BINS
 
         for (const pixel of pixels) {
@@ -589,7 +583,7 @@ export class AutoCollector {
                 )
 
                 if (similarity >= this.options.similarityThreshold) {
-                    this.ctx.logger.debug(
+                    this.ctx.logger.info(
                         `Similar image found: similarity=${similarity.toFixed(3)}, threshold=${this.options.similarityThreshold}`
                     )
                     return true
@@ -606,12 +600,12 @@ export class AutoCollector {
     private async saveEmoji(imageInfo: ImageInfo, session: Session) {
         try {
             if (this.emojiHashes.has(imageInfo.hash)) {
-                this.ctx.logger.debug('Duplicate image detected, skipping')
+                this.ctx.logger.info('Duplicate image detected, skipping')
                 return
             }
 
             if (await this.isSimilarToExisting(imageInfo)) {
-                this.ctx.logger.debug('Similar image detected, skipping')
+                this.ctx.logger.info('Similar image detected, skipping')
                 return
             }
 

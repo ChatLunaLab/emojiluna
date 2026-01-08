@@ -4,18 +4,37 @@ import type {} from '@koishijs/plugin-server'
 import fs from 'fs/promises'
 import type {} from '@koishijs/plugin-console'
 import { resolve } from 'path'
+import { getImageType } from './utils'
 
 export async function applyBackend(ctx: Context, config: Config) {
     if (config.injectVariables) {
-        const emojis = await ctx.emojiluna
-            .getEmojiList()
-            .then((res) => res.map((emoji) => `[${emoji.name}](${emoji.path})`))
-        ctx.effect(() => {
-            const dispose = ctx.chatluna.promptRenderer.setVariable(
-                'emojis',
-                emojis.join(',')
+        ctx.inject(['server', 'chatluna'], async (ctx) => {
+            const selfUrl = config.selfUrl || ctx.server.selfUrl || ''
+            const baseUrl = selfUrl + config.backendPath
+
+            const emojis = await ctx.emojiluna.getEmojiList({
+                limit: 100000
+            })
+
+            const emojiList = emojis
+                .map(
+                    (emoji) =>
+                        `- [${emoji.name}](${baseUrl}/get/${encodeURIComponent(emoji.name)}) - 分类: ${emoji.category}, 标签: ${emoji.tags.join(', ')}`
+                )
+                .join('\n')
+
+            const promptContent = config.injectVariablesPrompt.replace(
+                '{emojis}',
+                emojiList
             )
-            return () => dispose
+
+            ctx.effect(() => {
+                const dispose = ctx.chatluna.promptRenderer.setVariable(
+                    'emojis',
+                    promptContent
+                )
+                return () => dispose
+            })
         })
     }
 
@@ -243,11 +262,17 @@ export async function applyBackend(ctx: Context, config: Config) {
             async (koa) => {
                 const { category } = koa.params
                 const emojis = await ctx.emojiluna.getEmojiList({ category })
+                if (emojis.length === 0) {
+                    koa.status = 404
+                    return (koa.body = 'No emojis in this category')
+                }
                 // random emoji
                 const randomEmoji =
                     emojis[Math.floor(Math.random() * emojis.length)]
                 const emojiBuffer = await fs.readFile(randomEmoji.path)
-                koa.set('Content-Type', 'image/png')
+                const mimeType =
+                    randomEmoji.mimeType || getImageType(emojiBuffer)
+                koa.set('Content-Type', mimeType)
                 koa.set('Content-Length', emojiBuffer.length.toString())
                 koa.body = emojiBuffer
             }
@@ -264,21 +289,31 @@ export async function applyBackend(ctx: Context, config: Config) {
             const { tag } = koa.params
             const emojis = await ctx.emojiluna.getEmojiList({ tags: [tag] })
 
+            if (emojis.length === 0) {
+                koa.status = 404
+                return (koa.body = 'No emojis with this tag')
+            }
             // random emoji
             const randomEmoji =
                 emojis[Math.floor(Math.random() * emojis.length)]
             const emojiBuffer = await fs.readFile(randomEmoji.path)
-            koa.set('Content-Type', 'image/png')
+            const mimeType = randomEmoji.mimeType || getImageType(emojiBuffer)
+            koa.set('Content-Type', mimeType)
             koa.set('Content-Length', emojiBuffer.length.toString())
             koa.body = emojiBuffer
         })
 
         ctx.server.get(`${config.backendPath}/random`, async (koa) => {
             const emojis = await ctx.emojiluna.getEmojiList()
+            if (emojis.length === 0) {
+                koa.status = 404
+                return (koa.body = 'No emojis available')
+            }
             const randomEmoji =
                 emojis[Math.floor(Math.random() * emojis.length)]
             const emojiBuffer = await fs.readFile(randomEmoji.path)
-            koa.set('Content-Type', 'image/png')
+            const mimeType = randomEmoji.mimeType || getImageType(emojiBuffer)
+            koa.set('Content-Type', mimeType)
             koa.set('Content-Length', emojiBuffer.length.toString())
             koa.body = emojiBuffer
         })
@@ -292,7 +327,8 @@ export async function applyBackend(ctx: Context, config: Config) {
             }
 
             const emojiBuffer = await fs.readFile(emoji.path)
-            koa.set('Content-Type', 'image/png')
+            const mimeType = emoji.mimeType || getImageType(emojiBuffer)
+            koa.set('Content-Type', mimeType)
             koa.set('Content-Length', emojiBuffer.length.toString())
             koa.body = emojiBuffer
         })

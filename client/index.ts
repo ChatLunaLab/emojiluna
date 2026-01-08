@@ -35,6 +35,6 @@ export default (ctx: Context) => {
         path: '/emojiluna/webui',
         icon: 'Emoji',
         component: DashboardView,
-        authority: 0
+        authority: 3
     })
 }

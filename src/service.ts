@@ -18,6 +18,7 @@ import {
     chunkArray,
     extractors,
     generateId,
+    getImageType,
     ParseResult,
     tryParse
 } from './utils'
@@ -241,7 +242,9 @@ export class EmojiLunaService extends Service {
         aiAnalysis: boolean = this.config.autoAnalyze
     ): Promise<EmojiItem> {
         const id = randomUUID()
-        const fileName = `${id}.png`
+        const mimeType = getImageType(imageData)
+        const extension = getImageType(imageData, true)
+        const fileName = `${id}.${extension}`
         const storageDir = path.resolve(
             this.ctx.baseDir,
             this.config.storagePath
@@ -265,12 +268,16 @@ export class EmojiLunaService extends Service {
                     ],
                     description: aiResult.description
                 }
+            } else {
+                return
             }
         } else if (this.config.autoCategorize && !options.category) {
             const imageBase64 = imageData.toString('base64')
             const categorizeResult = await this.categorizeEmoji(imageBase64)
             if (categorizeResult) {
                 finalOptions.category = categorizeResult.category
+            } else {
+                return
             }
         }
 
@@ -280,6 +287,7 @@ export class EmojiLunaService extends Service {
             category: finalOptions.category || '其他',
             path: filePath,
             size: imageData.length,
+            mimeType,
             createdAt: new Date(),
             tags: finalOptions.tags || []
         }
@@ -293,6 +301,7 @@ export class EmojiLunaService extends Service {
                 category: emoji.category,
                 path: emoji.path,
                 size: emoji.size,
+                mime_type: emoji.mimeType,
                 created_at: emoji.createdAt,
                 tags: JSON.stringify(emoji.tags)
             }
@@ -554,6 +563,7 @@ export class EmojiLunaService extends Service {
                 category: emojiData.category,
                 path: emojiData.path,
                 size: emojiData.size,
+                mimeType: emojiData.mime_type || 'image/png',
                 createdAt: new Date(emojiData.created_at),
                 tags: JSON.parse(emojiData.tags || '[]')
             }
@@ -624,9 +634,7 @@ export class EmojiLunaService extends Service {
                 subfolders.push(entry.name)
             } else if (entry.isFile()) {
                 const ext = path.extname(entry.name).toLowerCase()
-                if (
-                    EmojiLunaService.SUPPORTED_EXTENSIONS.includes(ext)
-                ) {
+                if (EmojiLunaService.SUPPORTED_EXTENSIONS.includes(ext)) {
                     const stat = await fs.stat(entryPath)
                     files.push({
                         path: entryPath,
@@ -684,14 +692,15 @@ export class EmojiLunaService extends Service {
                 files.push(...subFiles)
             } else if (entry.isFile()) {
                 const ext = path.extname(entry.name).toLowerCase()
-                if (
-                    EmojiLunaService.SUPPORTED_EXTENSIONS.includes(ext)
-                ) {
+                if (EmojiLunaService.SUPPORTED_EXTENSIONS.includes(ext)) {
                     const stat = await fs.stat(entryPath)
 
                     // Determine category based on folder structure
                     let category = defaultCategory
-                    if (useSubfoldersAsCategories && folderPath !== actualBasePath) {
+                    if (
+                        useSubfoldersAsCategories &&
+                        folderPath !== actualBasePath
+                    ) {
                         // Get the immediate parent folder name as category
                         category = path.basename(folderPath)
                     }
@@ -775,7 +784,10 @@ export class EmojiLunaService extends Service {
             for (const categoryName of categoryNames) {
                 const exists = await this.getCategoryByName(categoryName)
                 if (!exists) {
-                    await this.addCategory(categoryName, `从文件夹导入: ${folderPath}`)
+                    await this.addCategory(
+                        categoryName,
+                        `从文件夹导入: ${folderPath}`
+                    )
                 }
             }
 
@@ -856,6 +868,7 @@ function defineDatabase(ctx: Context) {
             category: { type: 'string', length: 254 },
             path: { type: 'string', length: 500 },
             size: { type: 'integer' },
+            mime_type: { type: 'string', length: 50 },
             created_at: { type: 'timestamp' },
             tags: { type: 'string' }
         },
@@ -893,6 +906,7 @@ declare module 'koishi' {
             category: string
             path: string
             size: number
+            mime_type: string
             created_at: Date
             tags: string
         }

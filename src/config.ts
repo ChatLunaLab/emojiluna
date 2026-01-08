@@ -39,7 +39,10 @@ export const Config = Schema.intersect([
     }).description('基础配置'),
 
     Schema.object({
-        model: Schema.dynamic('model').description('使用的AI模型'),
+        model: Schema.dynamic('model').description('使用的AI模型')
+    }).description('AI功能配置'),
+
+    Schema.object({
         categorizePrompt: Schema.string()
             .role('textarea')
             .default(
@@ -116,13 +119,59 @@ export const Config = Schema.intersect([
 - 描述要生动具体，帮助用户理解表情包内涵
 - 名称要简洁易记，体现表情包特点`
             )
-            .description('表情包信息解析提示词')
-    }).description('AI功能配置'),
+            .description('表情包信息解析提示词'),
+        imageFilterPrompt: Schema.string()
+            .role('textarea')
+            .default(
+                `你是一个图片内容分析专家，需要判断图片的类型并决定是否适合作为表情包收集。
+
+请分析这张图片属于以下哪种类型：
+${IMAGE_CONTENT_TYPES.map((item) => `- ${item.type}: ${item.label} - ${item.description}`).join('\n')}
+
+分析要点：
+1. 观察图片的主要内容和特征
+2. 判断图片的来源（截图、照片、设计图等）
+3. 评估图片是否具有表情包价值（情感表达、趣味性、传播性）
+4. 识别低质量或无用的图片（模糊、广告、二维码等）
+
+请返回JSON格式：
+{
+  "imageType": "类型代码（从上述列表中选择）",
+  "confidence": 0.85,
+  "reason": "判断理由",
+  "isUseful": true
+}
+
+注意：
+- imageType 必须是上述类型代码之一
+- confidence 表示判断置信度（0-1）
+- isUseful 表示这张图片是否有收藏价值（低质量、广告、二维码等应该为 false）`
+            )
+            .description('图片类型过滤提示词'),
+        injectVariablesPrompt: Schema.string()
+            .role('textarea')
+            .default(
+                `你可以使用以下表情包来丰富你的回复。当你想要表达某种情感或反应时，可以使用这些表情包。
+
+可用表情包列表：
+{emojis}
+
+使用方式：在回复中使用 [表情包名称](URL) 的格式来插入表情包。`
+            )
+            .description('变量注入提示词（用于 ChatLuna 集成）')
+    }).description('提示词配置'),
 
     Schema.object({
         injectVariables: Schema.boolean()
             .default(true)
-            .description('是否启用变量注入到 ChatLuna'),
+            .description(
+                '是否启用变量注入到 ChatLuna。开启后可以使用 {emojis} 变量注入表情包信息'
+            ),
+        injectVariablesLimit: Schema.number()
+            .default(50)
+            .min(10)
+            .max(500)
+            .description('注入表情包数量限制'),
         backendServer: Schema.boolean()
             .description('是否启用后端服务器')
             .default(false),
@@ -182,35 +231,7 @@ export const Config = Schema.intersect([
             )
         )
             .description('接受的图片类型（只有这些类型的图片会被收集）')
-            .default(DEFAULT_ACCEPTED_IMAGE_TYPES as ImageContentType[]),
-        imageFilterPrompt: Schema.string()
-            .role('textarea')
-            .default(
-                `你是一个图片内容分析专家，需要判断图片的类型并决定是否适合作为表情包收集。
-
-请分析这张图片属于以下哪种类型：
-${IMAGE_CONTENT_TYPES.map((item) => `- ${item.type}: ${item.label} - ${item.description}`).join('\n')}
-
-分析要点：
-1. 观察图片的主要内容和特征
-2. 判断图片的来源（截图、照片、设计图等）
-3. 评估图片是否具有表情包价值（情感表达、趣味性、传播性）
-4. 识别低质量或无用的图片（模糊、广告、二维码等）
-
-请返回JSON格式：
-{
-  "imageType": "类型代码（从上述列表中选择）",
-  "confidence": 0.85,
-  "reason": "判断理由",
-  "isUseful": true
-}
-
-注意：
-- imageType 必须是上述类型代码之一
-- confidence 表示判断置信度（0-1）
-- isUseful 表示这张图片是否有收藏价值（低质量、广告、二维码等应该为 false）`
-            )
-            .description('图片类型过滤提示词')
+            .default(DEFAULT_ACCEPTED_IMAGE_TYPES as ImageContentType[])
     }).description('自动获取配置')
 ])
 
@@ -226,13 +247,15 @@ export interface Config {
     selfUrl: string
     categorizePrompt: string
     analyzePrompt: string
-    maxNewCategories: number
+    imageFilterPrompt: string
+    injectVariablesPrompt: string
     minEmojiSize: number
     maxEmojiSize: number
     similarityThreshold: number
     whitelistGroups: string[]
     emojiFrequencyThreshold: number
     injectVariables: boolean
+    injectVariablesLimit: number
     backendServer: boolean
     backendPath: string
     groupAutoCollectLimit: Record<
@@ -241,7 +264,6 @@ export interface Config {
     >
     enableImageTypeFilter: boolean
     acceptedImageTypes: ImageContentType[]
-    imageFilterPrompt: string
 }
 
 export const name = 'emojiluna'

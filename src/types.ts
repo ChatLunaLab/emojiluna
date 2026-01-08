@@ -4,6 +4,7 @@ export interface EmojiItem {
     category: string
     path: string
     size: number
+    mimeType: string
     createdAt: Date
     tags: string[]
 }
