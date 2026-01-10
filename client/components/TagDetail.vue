@@ -499,12 +499,14 @@ onMounted(() => loadEmojis())
 }
 .emoji-grid-container {
     padding-bottom: 80px;
+    min-height: 200px;
 }
 .emoji-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   gap: 12px;
   margin-bottom: 20px;
+  align-content: start;
 }
 .pagination {
   display: flex;

@@ -607,7 +607,22 @@ const copyPreviewLink = async () => {
     await navigator.clipboard.writeText(previewEmojiLink.value)
     ElMessage.success('链接已复制到剪贴板')
   } catch (error) {
-    ElMessage.info('请手动复制链接')
+    // Fallback for browsers that don't support clipboard API
+    const textArea = document.createElement('textarea')
+    textArea.value = previewEmojiLink.value
+    textArea.style.position = 'fixed'
+    textArea.style.left = '-9999px'
+    textArea.style.top = '-9999px'
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+    try {
+      document.execCommand('copy')
+      ElMessage.success('链接已复制到剪贴板')
+    } catch (err) {
+      ElMessage.error('复制失败，请手动复制')
+    }
+    document.body.removeChild(textArea)
   }
 }
 
@@ -712,6 +727,7 @@ onMounted(refreshData)
 
 .emoji-grid-container {
     padding-bottom: 80px; /* Space for floating bar */
+    min-height: 200px;
 }
 
 .emoji-grid {
@@ -719,6 +735,7 @@ onMounted(refreshData)
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   gap: 12px;
   margin-bottom: 20px;
+  align-content: start;
 }
 
 /* Pagination */

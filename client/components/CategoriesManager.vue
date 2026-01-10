@@ -197,26 +197,32 @@ const filteredCategories = computed(() => {
 const loadCategories = async () => {
   loading.value = true
   try {
-    categories.value = await send('emojiluna/getCategories') || []
-    baseUrl.value = await send('emojiluna/getBaseUrl') || '/emojiluna'
-
-    // Load covers
-    const promises = categories.value.map(async (cat) => {
-        if (cat.emojiCount > 0) {
-            const result = await send('emojiluna/getEmojiList', { category: cat.name, limit: 1 })
-            if (result && result.length > 0) {
-                categoryCovers.value[cat.name] = result[0]
-            }
-        }
-    })
-    await Promise.all(promises)
-
+    const [categoriesData, baseUrlData] = await Promise.all([
+      send('emojiluna/getCategories'),
+      send('emojiluna/getBaseUrl')
+    ])
+    categories.value = categoriesData || []
+    baseUrl.value = baseUrlData || '/emojiluna'
   } catch (error) {
     console.error('Failed to load categories:', error)
     ElMessage.error('加载分类失败')
   } finally {
     loading.value = false
   }
+
+  // Load covers asynchronously without blocking UI
+  categories.value.forEach(async (cat) => {
+    if (cat.emojiCount > 0) {
+      try {
+        const result = await send('emojiluna/getEmojiList', { category: cat.name, limit: 1 })
+        if (result && result.length > 0) {
+          categoryCovers.value[cat.name] = result[0]
+        }
+      } catch (e) {
+        // Ignore cover loading errors
+      }
+    }
+  })
 }
 
 const refreshData = () => {

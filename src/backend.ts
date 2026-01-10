@@ -30,13 +30,19 @@ export async function applyBackend(ctx: Context, config: Config) {
                 emojiList
             )
 
-            ctx.effect(() => {
-                const dispose = ctx.chatluna.promptRenderer.setVariable(
-                    'emojis',
-                    promptContent
-                )
-                return () => dispose
-            })
+            ctx.setInterval(
+                () => {
+                    ctx.chatluna.promptRenderer.setVariable(
+                        'emojis',
+                        promptContent
+                    )
+                },
+                1000 * 60 * 5
+            )
+
+            ctx.effect(
+                () => () => ctx.chatluna.promptRenderer.removeVariable('emojis')
+            )
         })
     }
 

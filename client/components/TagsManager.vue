@@ -182,22 +182,6 @@ const filteredTags = computed(() => {
 const loadTags = async () => {
   loading.value = true
   try {
-    // We need to fetch all tags and calculate usage or fetch usage from backend
-    // Backend `getAllTags` returns string[]
-    // We need to fetch emojis to count usage? That's heavy.
-    // Let's check how it was done before.
-    // Before: fetched ALL emojis and counted locally. Heavy but accurate if backend doesn't support tag stats.
-    // Let's stick to that for now or ask backend to support it.
-    // Ideally backend should return `TagWithCount[]`.
-    // Since I can't modify backend easily (user said "only frontend"), I have to stick to frontend counting or simplify.
-    // Wait, fetching ALL emojis just to count tags is very bad if we have 10k emojis.
-    // But `getAllTags` returns all tags.
-    // Maybe we just show tags without precise count if it's too heavy?
-    // User requirement: "remove statistics... optimize... like gallery albums".
-    // Albums usually have count.
-    // Let's try to get counts by fetching all emojis meta data (without heavy load? `getEmojiList` returns full object).
-    // If I have to, I'll fetch all. `getEmojiList` sends everything.
-
     const [allTagsData, allEmojis, baseUrlData] = await Promise.all([
       send('emojiluna/getAllTags'),
       send('emojiluna/getEmojiList', {}),
