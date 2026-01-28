@@ -92,12 +92,28 @@
     </div>
 
     <!-- Emoji Grid -->
-    <div class="emoji-grid-container" v-loading="loading">
+    <div
+        class="emoji-grid-container"
+        v-loading="loading"
+        ref="containerRef"
+        @mousedown="handleMouseDown"
+    >
+      <div
+          v-if="isDragSelecting"
+          class="selection-box"
+          :style="{
+              left: selectionBox.left + 'px',
+              top: selectionBox.top + 'px',
+              width: selectionBox.width + 'px',
+              height: selectionBox.height + 'px'
+          }"
+      ></div>
       <template v-if="emojis.length > 0">
         <div class="emoji-grid">
             <EmojiCard
               v-for="emoji in emojis"
               :key="emoji.id"
+              :ref="(el) => setItemRef(el, emoji.id)"
               :emoji="emoji"
               :base-url="baseUrl"
               :selectable="isSelectionMode"
@@ -287,7 +303,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { send } from '@koishijs/client'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -297,6 +313,7 @@ import EmojiDialog from './EmojiDialog.vue'
 import AddEmojiDialog from './AddEmojiDialog.vue'
 import FolderImportDialog from './FolderImportDialog.vue'
 import type { EmojiItem, Category, EmojiSearchOptions } from 'koishi-plugin-emojiluna'
+import { useDragSelect } from '../composables/useDragSelect'
 
 const { t } = useI18n()
 
@@ -331,6 +348,29 @@ const selectedEmojis = ref<EmojiItem[]>([])
 const showMoveDialog = ref(false)
 const targetCategory = ref('')
 const moving = ref(false)
+
+// Drag Select
+const containerRef = ref<HTMLElement>()
+const itemRefs = new Map<string, HTMLElement>()
+const setItemRef = (el: any, id: string) => {
+    if (el && el.$el) {
+        itemRefs.set(id, el.$el)
+    } else if (el) {
+        itemRefs.set(id, el)
+    } else {
+        itemRefs.delete(id)
+    }
+}
+
+const { isDragSelecting, selectionBox, handleMouseDown } = useDragSelect(
+    containerRef,
+    emojis,
+    (item) => itemRefs.get(item.id),
+    'id',
+    selectedEmojis,
+    () => { isSelectionMode.value = true },
+    () => { isSelectionMode.value = false }
+)
 
 const previewEmojiUrl = computed(() => {
   if (!previewEmoji.value) return ''
@@ -961,5 +1001,17 @@ onMounted(refreshData)
     .image-box {
         width: 120px;
     }
+}
+.emoji-grid-container {
+    position: relative;
+    user-select: none; /* Prevent text selection during drag */
+}
+
+.selection-box {
+    position: absolute;
+    background-color: rgba(64, 158, 255, 0.2);
+    border: 1px solid rgba(64, 158, 255, 0.6);
+    z-index: 1000;
+    pointer-events: none;
 }
 </style>

@@ -34,11 +34,27 @@
       </div>
 
       <!-- Grid -->
-      <div class="selector-grid" v-loading="loading">
+      <div
+        class="selector-grid"
+        v-loading="loading"
+        ref="containerRef"
+        @mousedown="handleMouseDown"
+      >
+        <div
+          v-if="isDragSelecting"
+          class="selection-box"
+          :style="{
+              left: selectionBox.left + 'px',
+              top: selectionBox.top + 'px',
+              width: selectionBox.width + 'px',
+              height: selectionBox.height + 'px'
+          }"
+        ></div>
         <template v-if="emojis.length > 0">
              <EmojiCard
                 v-for="emoji in emojis"
                 :key="emoji.id"
+                :ref="(el) => setItemRef(el, emoji.id)"
                 :emoji="emoji"
                 :base-url="baseUrl"
                 selectable
@@ -87,6 +103,7 @@ import { send } from '@koishijs/client'
 import { Search } from '@element-plus/icons-vue'
 import EmojiCard from './EmojiCard.vue'
 import type { EmojiItem, Category, EmojiSearchOptions } from 'koishi-plugin-emojiluna'
+import { useDragSelect } from '../composables/useDragSelect'
 
 const props = defineProps<{
   modelValue: boolean
@@ -117,6 +134,29 @@ const filterCategory = ref('')
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+
+// Drag Select
+const containerRef = ref<HTMLElement>()
+const itemRefs = new Map<string, HTMLElement>()
+const setItemRef = (el: any, id: string) => {
+    if (el && el.$el) {
+        itemRefs.set(id, el.$el)
+    } else if (el) {
+        itemRefs.set(id, el)
+    } else {
+        itemRefs.delete(id)
+    }
+}
+
+const { isDragSelecting, selectionBox, handleMouseDown } = useDragSelect(
+    containerRef,
+    emojis,
+    (item) => itemRefs.get(item.id),
+    'id',
+    selectedEmojis,
+    () => { }, // No special mode to enable for ImageSelector, it's always selecting
+    () => { }
+)
 
 // Methods
 const loadData = async () => {
@@ -259,6 +299,16 @@ watch(visible, (val) => {
     gap: 12px;
     padding: 4px;
     align-content: start;
+    position: relative; /* Important for selection box */
+    user-select: none;
+}
+
+.selection-box {
+    position: absolute;
+    background-color: rgba(64, 158, 255, 0.2);
+    border: 1px solid rgba(64, 158, 255, 0.6);
+    z-index: 1000;
+    pointer-events: none;
 }
 
 .selector-item {

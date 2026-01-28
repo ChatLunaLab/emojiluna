@@ -63,12 +63,28 @@
     </div>
 
     <!-- Grid -->
-    <div class="emoji-grid-container" v-loading="loading">
+    <div
+        class="emoji-grid-container"
+        v-loading="loading"
+        ref="containerRef"
+        @mousedown="handleMouseDown"
+    >
+      <div
+          v-if="isDragSelecting"
+          class="selection-box"
+          :style="{
+              left: selectionBox.left + 'px',
+              top: selectionBox.top + 'px',
+              width: selectionBox.width + 'px',
+              height: selectionBox.height + 'px'
+          }"
+      ></div>
       <template v-if="emojis.length > 0">
         <div class="emoji-grid">
             <EmojiCard
               v-for="emoji in emojis"
               :key="emoji.id"
+              :ref="(el) => setItemRef(el, emoji.id)"
               :emoji="emoji"
               :base-url="baseUrl"
               :selectable="isSelectionMode"
@@ -273,6 +289,7 @@ import EmojiDialog from './EmojiDialog.vue'
 import AddEmojiDialog from './AddEmojiDialog.vue'
 import ImageSelector from './ImageSelector.vue'
 import type { EmojiItem, Category } from 'koishi-plugin-emojiluna'
+import { useDragSelect } from '../composables/useDragSelect'
 
 const { t } = useI18n()
 
@@ -312,6 +329,29 @@ const selectedEmojis = ref<EmojiItem[]>([])
 const showMoveDialog = ref(false)
 const targetCategory = ref('')
 const moving = ref(false)
+
+// Drag Select
+const containerRef = ref<HTMLElement>()
+const itemRefs = new Map<string, HTMLElement>()
+const setItemRef = (el: any, id: string) => {
+    if (el && el.$el) {
+        itemRefs.set(id, el.$el)
+    } else if (el) {
+        itemRefs.set(id, el)
+    } else {
+        itemRefs.delete(id)
+    }
+}
+
+const { isDragSelecting, selectionBox, handleMouseDown } = useDragSelect(
+    containerRef,
+    emojis,
+    (item) => itemRefs.get(item.id),
+    'id',
+    selectedEmojis,
+    () => { isSelectionMode.value = true },
+    () => { isSelectionMode.value = false }
+)
 
 // Computed
 const previewEmojiUrl = computed(() => {
@@ -838,5 +878,18 @@ watch(
         grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
         gap: 8px;
     }
+}
+
+.emoji-grid-container {
+    position: relative;
+    user-select: none;
+}
+
+.selection-box {
+    position: absolute;
+    background-color: rgba(64, 158, 255, 0.2);
+    border: 1px solid rgba(64, 158, 255, 0.6);
+    z-index: 1000;
+    pointer-events: none;
 }
 </style>
