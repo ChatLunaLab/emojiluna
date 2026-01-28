@@ -9,7 +9,7 @@ import {
     sampleFrameIndices
 } from './imageProcessor'
 import fs from 'fs/promises'
-import crypto from 'crypto'
+import { hashBuffer } from './utils'
 
 export interface AutoCollectOptions {
     minSize: number
@@ -288,18 +288,14 @@ export class AutoCollector {
 
             if (frequency < this.options.emojiFrequencyThreshold) {
                 this.ctx.logger.info(
-                    `Image frequency too low: ${frequency}/${this.options.emojiFrequencyThreshold}`
+                    `Skip auto-collect: frequency too low (${frequency}/${this.options.emojiFrequencyThreshold})`
                 )
                 return
             }
 
-            if (this.emojiHashes.has(imageInfo.hash)) {
-                this.ctx.logger.info('Duplicate image detected, skipping')
-                return
-            }
-
-            if (await this.isSimilarToExisting(imageInfo)) {
-                this.ctx.logger.info('Similar image detected, skipping')
+            const duplicateReason = await this.getDuplicateReason(imageInfo)
+            if (duplicateReason) {
+                this.ctx.logger.info(`Skip auto-collect: ${duplicateReason}`)
                 return
             }
 
@@ -312,12 +308,12 @@ export class AutoCollector {
                 if (filterResult) {
                     if (!filterResult.isAcceptable) {
                         this.ctx.logger.warn(
-                            `Image rejected by AI filter: type=${filterResult.imageType}, reason=${filterResult.reason}`
+                            `Skip auto-collect: rejected by AI filter (type=${filterResult.imageType}, reason=${filterResult.reason})`
                         )
                         return
                     }
                     this.ctx.logger.warn(
-                        `Image accepted by AI filter: type=${filterResult.imageType}, confidence=${filterResult.confidence}`
+                        `AI filter accepted image (type=${filterResult.imageType}, confidence=${filterResult.confidence})`
                     )
                 }
             }
@@ -357,14 +353,14 @@ export class AutoCollector {
 
         if (sizeKB < this.options.minSize) {
             this.ctx.logger.info(
-                `Image too small: ${sizeKB.toFixed(2)}KB < ${this.options.minSize}KB`
+                `Skip auto-collect: image too small (${sizeKB.toFixed(2)}KB < ${this.options.minSize}KB)`
             )
             return false
         }
 
         if (sizeMB > this.options.maxSize) {
             this.ctx.logger.info(
-                `Image too large: ${sizeMB.toFixed(2)}MB > ${this.options.maxSize}MB`
+                `Skip auto-collect: image too large (${sizeMB.toFixed(2)}MB > ${this.options.maxSize}MB)`
             )
             return false
         }
@@ -373,7 +369,7 @@ export class AutoCollector {
     }
 
     private calculateImageHash(buffer: Buffer): string {
-        return crypto.createHash('md5').update(buffer).digest('hex')
+        return hashBuffer(buffer)
     }
 
     private async extractImageFeatures(
@@ -600,12 +596,9 @@ export class AutoCollector {
     private async saveEmoji(imageInfo: ImageInfo, session: Session) {
         try {
             if (this.emojiHashes.has(imageInfo.hash)) {
-                this.ctx.logger.info('Duplicate image detected, skipping')
-                return
-            }
-
-            if (await this.isSimilarToExisting(imageInfo)) {
-                this.ctx.logger.info('Similar image detected, skipping')
+                this.ctx.logger.info(
+                    'Skip auto-collect: duplicate hash already collected'
+                )
                 return
             }
 
@@ -634,6 +627,21 @@ export class AutoCollector {
         } catch (error) {
             this.ctx.logger.error(`Failed to save emoji: ${error.message}`)
         }
+    }
+
+    private async getDuplicateReason(
+        imageInfo: ImageInfo
+    ): Promise<string | null> {
+        if (this.emojiHashes.has(imageInfo.hash)) {
+            return 'duplicate hash already collected'
+        }
+
+        const isSimilar = await this.isSimilarToExisting(imageInfo)
+        if (isSimilar) {
+            return 'similar to an existing emoji'
+        }
+
+        return null
     }
 
     public updateConfig(config: Config) {

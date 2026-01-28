@@ -1,4 +1,5 @@
 import { h, Session } from 'koishi'
+import crypto from 'crypto'
 
 export type ParseResult<T> = T | null
 
@@ -132,4 +133,8 @@ export function chunkArray<T>(array: T[], size: number): T[][] {
         result[chunkIndex].push(item)
         return result
     }, [] as T[][])
+}
+
+export function hashBuffer(buffer: Buffer): string {
+    return crypto.createHash('sha256').update(buffer).digest('hex')
 }
