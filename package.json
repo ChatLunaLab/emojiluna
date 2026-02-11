@@ -1,7 +1,7 @@
 {
     "name": "koishi-plugin-emojiluna",
     "description": "Smart emoji management plugin with AI categorization",
-    "version": "1.1.4",
+    "version": "1.1.5",
     "main": "lib/index.js",
     "typings": "lib/index.d.ts",
     "types": "lib/index.d.ts",

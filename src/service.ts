@@ -141,7 +141,7 @@ export class EmojiLunaService extends Service {
         if (!this._model?.value || !this.config.autoCategorize) return null
 
         try {
-            const prompt = this.config.categorizePrompt.replace(
+            const prompt = this.config.categorizePrompt.replaceAll(
                 '{categories}',
                 this.config.categories.join(', ')
             )
@@ -149,8 +149,16 @@ export class EmojiLunaService extends Service {
             const result = await this._model.value.invoke([
                 new SystemMessage(prompt),
                 new HumanMessage({
-                    content: '请分析这个表情包',
-                    additional_kwargs: { images }
+                    content: [
+                        {
+                            type: 'text',
+                            content: '请分析这个表情包'
+                        },
+                       ...images.map(image => ({
+                            type: 'image_url',
+                            content: image
+                        }))
+                    ]
                 })
             ])
 
@@ -182,8 +190,16 @@ export class EmojiLunaService extends Service {
             const result = await this._model.value.invoke([
                 new SystemMessage(this.config.analyzePrompt),
                 new HumanMessage({
-                    content: '请分析这个表情包',
-                    additional_kwargs: { images }
+                    content: [
+                        {
+                            type: 'text',
+                            content: '请分析这个表情包'
+                        },
+                       ...images.map(image => ({
+                            type: 'image_url',
+                            content: image
+                        }))
+                    ]
                 })
             ])
 
@@ -219,8 +235,16 @@ export class EmojiLunaService extends Service {
             const result = await this._model.value.invoke([
                 new SystemMessage(this.config.imageFilterPrompt),
                 new HumanMessage({
-                    content: '请分析这张图片的类型',
-                    additional_kwargs: { images }
+                    content: [
+                        {
+                            type: 'text',
+                            content: '请分析这个表情包'
+                        },
+                       ...images.map(image => ({
+                            type: 'image_url',
+                            content: image
+                        }))
+                    ]
                 })
             ])
 
