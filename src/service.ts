@@ -22,7 +22,7 @@ import {
     ParseResult,
     tryParse
 } from './utils'
-import { extractSampledFrames } from './imageProcessor'
+import { extractSampledFrames, getImageMetadata } from './imageProcessor'
 import path from 'path'
 import fs from 'fs/promises'
 import { randomUUID } from 'crypto'
@@ -113,25 +113,38 @@ export class EmojiLunaService extends Service {
         return null
     }
 
-    private async buildAiImages(imageBase64: string): Promise<string[]> {
+    private async buildAiImages(
+        imageBase64: string
+    ): Promise<{ data: string; mimeType: string }[]> {
         try {
             const buffer = Buffer.from(imageBase64, 'base64')
-            const { frames, metadata } = await extractSampledFrames(
-                buffer,
-                EmojiLunaService.AI_FRAME_SAMPLES,
-                'png'
-            )
+            const metadata = await getImageMetadata(buffer)
 
-            if (frames.length === 0 || metadata.frameCount <= 1) {
-                return [imageBase64]
+            // 单帧图片直接返回原始 base64
+            if (metadata.frameCount <= 1) {
+                return [{ data: imageBase64, mimeType: `image/${metadata.format}` }]
             }
 
-            return frames.map((frame) => frame.toString('base64'))
+            // 多帧图片使用原始格式编码
+            const { frames } = await extractSampledFrames(
+                buffer,
+                EmojiLunaService.AI_FRAME_SAMPLES,
+                metadata.format as 'png' | 'jpeg' | 'webp'
+            )
+
+            if (frames.length === 0) {
+                return [{ data: imageBase64, mimeType: `image/${metadata.format}` }]
+            }
+
+            return frames.map((frame) => ({
+                data: frame.toString('base64'),
+                mimeType: `image/${metadata.format}`
+            }))
         } catch (error) {
             this.ctx.logger.warn(
                 `AI image preparation failed: ${error.message}`
             )
-            return [imageBase64]
+            return [{ data: imageBase64, mimeType: 'image/png' }]
         }
     }
 
@@ -152,11 +165,14 @@ export class EmojiLunaService extends Service {
                     content: [
                         {
                             type: 'text',
-                            content: '请分析这个表情包'
+                            text: '请分析这个表情包'
                         },
-                       ...images.map(image => ({
+                        ...images.map(image => ({
                             type: 'image_url',
-                            content: image
+                            image_url: {
+                                url: `data:${image.mimeType};base64,${image.data}`,
+                                detail: 'low'
+                            }
                         }))
                     ]
                 })
@@ -193,11 +209,14 @@ export class EmojiLunaService extends Service {
                     content: [
                         {
                             type: 'text',
-                            content: '请分析这个表情包'
+                            text: '请分析这个表情包'
                         },
-                       ...images.map(image => ({
+                        ...images.map(image => ({
                             type: 'image_url',
-                            content: image
+                            image_url: {
+                                url: `data:${image.mimeType};base64,${image.data}`,
+                                detail: 'low'
+                            }
                         }))
                     ]
                 })
@@ -238,11 +257,14 @@ export class EmojiLunaService extends Service {
                     content: [
                         {
                             type: 'text',
-                            content: '请分析这个表情包'
+                            text: '请分析这个表情包'
                         },
-                       ...images.map(image => ({
+                        ...images.map(image => ({
                             type: 'image_url',
-                            content: image
+                            image_url: {
+                                url: `data:${image.mimeType};base64,${image.data}`,
+                                detail: 'low'
+                            }
                         }))
                     ]
                 })
