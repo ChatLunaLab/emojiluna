@@ -202,9 +202,13 @@ export class EmojiLunaService extends Service {
         if (!this._model?.value || !this.config.autoAnalyze) return null
 
         try {
+            const prompt = this.config.analyzePrompt.replaceAll(
+                '{categories}',
+                this.config.categories.join(', ')
+            )
             const images = await this.buildAiImages(imageBase64)
             const result = await this._model.value.invoke([
-                new SystemMessage(this.config.analyzePrompt),
+                new SystemMessage(prompt),
                 new HumanMessage({
                     content: [
                         {
