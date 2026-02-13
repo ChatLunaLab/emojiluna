@@ -14,31 +14,46 @@ export async function applyBackend(ctx: Context, config: Config) {
 
             await ctx.emojiluna.ready
 
-            const emojis = await ctx.emojiluna.getEmojiList({
-                limit: 100000
-            })
+            const escapeMarkdown = (text: string) =>
+                text.replace(/([\[\]\(\)])/g, '\\$1')
 
-            const emojiList = emojis
-                .map(
-                    (emoji) =>
-                        `- [${emoji.name}](${baseUrl}/get/${encodeURIComponent(emoji.name)}) - 分类: ${emoji.category}, 标签: ${emoji.tags.join(', ')}`
-                )
-                .join('\n')
+            const refreshPromptVariable = async () => {
+                try {
+                    const emojis = await ctx.emojiluna.getEmojiList({
+                        limit: config.injectVariablesLimit
+                    })
 
-            const promptContent = config.injectVariablesPrompt.replace(
-                '{emojis}',
-                emojiList
-            )
+                    const emojiList = emojis
+                        .map(
+                            (emoji) =>
+                                `- [${escapeMarkdown(emoji.name)}](${baseUrl}/get/${encodeURIComponent(emoji.id)}) - 分类: ${emoji.category}, 标签: ${emoji.tags.join(', ')}`
+                        )
+                        .join('\n')
 
-            ctx.setInterval(
-                () => {
+                    const promptContent = config.injectVariablesPrompt.replace(
+                        '{emojis}',
+                        emojiList
+                    )
+
                     ctx.chatluna.promptRenderer.setVariable(
                         'emojis',
                         promptContent
                     )
-                },
+                } catch (error) {
+                    ctx.logger.warn(`刷新 emojiluna 变量失败: ${error.message}`)
+                }
+            }
+
+            await refreshPromptVariable()
+
+            ctx.setInterval(
+                () => void refreshPromptVariable(),
                 1000 * 60 * 5
             )
+
+            ctx.on('emojiluna/emoji-added', () => void refreshPromptVariable())
+            ctx.on('emojiluna/emoji-updated', () => void refreshPromptVariable())
+            ctx.on('emojiluna/emoji-deleted', () => void refreshPromptVariable())
 
             ctx.effect(
                 () => () => ctx.chatluna.promptRenderer.removeVariable('emojis')
@@ -332,7 +347,9 @@ export async function applyBackend(ctx: Context, config: Config) {
 
         ctx.server.get(`${config.backendPath}/get/:id`, async (koa) => {
             const { id } = koa.params
-            const emoji = await ctx.emojiluna.getEmojiByName(id)
+            const emoji =
+                (await ctx.emojiluna.getEmojiById(id)) ||
+                (await ctx.emojiluna.getEmojiByName(id))
             if (!emoji) {
                 koa.status = 404
                 return (koa.body = 'Emoji not found')

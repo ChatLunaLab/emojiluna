@@ -312,7 +312,11 @@ const handleSubmit = async () => {
             await submitUrl()
         }
 
-        ElMessage.success(t('emojiluna.addSuccess'))
+        if (activeTab.value === 'upload' && form.aiAnalysis) {
+            ElMessage.success('上传成功，AI正在后台分析，请稍后再使用最新分类/标签检索')
+        } else {
+            ElMessage.success(t('emojiluna.addSuccess'))
+        }
         emit('success')
         handleClose()
     } catch (error) {
@@ -326,33 +330,34 @@ const handleSubmit = async () => {
 const submitFile = async () => {
     if (fileList.value.length === 0) return
 
-    const filesToUpload = fileList.value.map(file => {
-        return new Promise<EmojiAddOptions>((resolve, reject) => {
-            if (!file.raw) {
-                return reject(new Error('File object is missing.'))
-            }
-            const reader = new FileReader()
-            reader.readAsDataURL(file.raw)
-            reader.onload = () => {
-                const base64 = (reader.result as string).split(',')[1]
-                resolve({
-                    name: file.name.replace(/\.[^/.]+$/, ''),
-                    category: form.category || '其他',
-                    tags: form.tags,
-                    imageData: base64,
-                    //mimeType: file.raw.type,
-                })
-            }
-            reader.onerror = error => reject(error)
+    const batchSize = 6
+    for (let i = 0; i < fileList.value.length; i += batchSize) {
+        const batch = fileList.value.slice(i, i + batchSize)
+
+        const filesToUpload = batch.map((file) => {
+            return new Promise<EmojiAddOptions>((resolve, reject) => {
+                if (!file.raw) {
+                    return reject(new Error('File object is missing.'))
+                }
+                const reader = new FileReader()
+                reader.readAsDataURL(file.raw)
+                reader.onload = () => {
+                    const base64 = (reader.result as string).split(',')[1]
+                    resolve({
+                        name: file.name.replace(/\.[^/.]+$/, ''),
+                        category: form.category || '其他',
+                        tags: form.tags,
+                        imageData: base64,
+                        //mimeType: file.raw.type,
+                    })
+                }
+                reader.onerror = (error) => reject(error)
+            })
         })
-    })
 
-    const emojisData = await Promise.all(filesToUpload)
-
-    await send('emojiluna/addEmojis',
-        emojisData,
-        form.aiAnalysis,
-    )
+        const emojisData = await Promise.all(filesToUpload)
+        await send('emojiluna/addEmojis', emojisData, form.aiAnalysis)
+    }
 }
 
 const submitUrl = async () => {

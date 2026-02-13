@@ -335,7 +335,7 @@ export class EmojiLunaService extends Service {
                     description: aiResult.description
                 }
             } else {
-                return
+                throw new Error('AI分析失败，无法添加表情包')
             }
         } else if (this.config.autoCategorize && !options.category) {
             const imageBase64 = imageData.toString('base64')
@@ -343,7 +343,7 @@ export class EmojiLunaService extends Service {
             if (categorizeResult) {
                 finalOptions.category = categorizeResult.category
             } else {
-                return
+                throw new Error('AI分类失败，无法添加表情包')
             }
         }
 
@@ -384,24 +384,157 @@ export class EmojiLunaService extends Service {
         aiAnalysis: boolean
     ): Promise<EmojiItem[]> {
         const createdEmojis: EmojiItem[] = []
+        const batchSize = 6
+        const pendingAiTasks: {
+            id: string
+            buffer: Buffer
+            fallbackName: string
+            fallbackCategory: string
+            fallbackTags: string[]
+        }[] = []
 
-        for (const { options, buffer } of emojis) {
-            try {
-                const createdEmoji = await this.addEmoji(
-                    options,
-                    buffer,
-                    aiAnalysis
-                )
-                createdEmojis.push(createdEmoji)
-            } catch (error) {
-                this.ctx.logger.error(
-                    `Failed to add emoji ${options.name}:`,
-                    error
-                )
+        for (let i = 0; i < emojis.length; i += batchSize) {
+            const batch = emojis.slice(i, i + batchSize)
+            const results = await Promise.all(
+                batch.map(async ({ options, buffer }) => {
+                    try {
+                        if (aiAnalysis) {
+                            const createOptions = {
+                                ...options,
+                                category: options.category || '其他',
+                                tags: options.tags || []
+                            }
+                            const createdEmoji = await this.addEmoji(
+                                createOptions,
+                                buffer,
+                                false
+                            )
+
+                            pendingAiTasks.push({
+                                id: createdEmoji.id,
+                                buffer,
+                                fallbackName: createOptions.name,
+                                fallbackCategory: createOptions.category,
+                                fallbackTags: createOptions.tags
+                            })
+
+                            return createdEmoji
+                        }
+
+                        return await this.addEmoji(options, buffer, false)
+                    } catch (error) {
+                        this.ctx.logger.error(
+                            `Failed to add emoji ${options.name}:`,
+                            error
+                        )
+                        return null
+                    }
+                })
+            )
+
+            for (const emoji of results) {
+                if (emoji) {
+                    createdEmojis.push(emoji)
+                }
             }
         }
 
+        if (aiAnalysis && pendingAiTasks.length > 0) {
+            this.ctx.logger.info(
+                `已上传 ${pendingAiTasks.length} 个表情包，开始后台AI分析`
+            )
+            void this.runAiAnalysisInBackground(pendingAiTasks).catch((error) =>
+                this.ctx.logger.error('后台AI分析任务异常:', error)
+            )
+        }
+
         return createdEmojis
+    }
+
+    private async runAiAnalysisInBackground(
+        tasks: {
+            id: string
+            buffer: Buffer
+            fallbackName: string
+            fallbackCategory: string
+            fallbackTags: string[]
+        }[]
+    ) {
+        const batchSize = 6
+
+        for (let i = 0; i < tasks.length; i += batchSize) {
+            const batch = tasks.slice(i, i + batchSize)
+            await Promise.all(
+                batch.map(async (task) => {
+                    try {
+                        const aiResult = await this.analyzeEmoji(
+                            task.buffer.toString('base64')
+                        )
+
+                        if (!aiResult) {
+                            return
+                        }
+
+                        const mergedTags = [
+                            ...new Set([
+                                ...task.fallbackTags,
+                                ...(aiResult.tags || [])
+                            ])
+                        ]
+
+                        await this.updateEmojiInfo(task.id, {
+                            name: aiResult.name || task.fallbackName,
+                            category: aiResult.category || task.fallbackCategory,
+                            tags: mergedTags
+                        })
+                    } catch (error) {
+                        this.ctx.logger.error(
+                            `后台AI分析失败 ${task.id}:`,
+                            error
+                        )
+                    }
+                })
+            )
+        }
+
+        this.ctx.logger.info(`后台AI分析完成，共处理 ${tasks.length} 个表情包`)
+    }
+
+    private async updateEmojiInfo(
+        id: string,
+        updates: Partial<Pick<EmojiItem, 'name' | 'category' | 'tags'>>
+    ): Promise<boolean> {
+        const emoji = this._emojiStorage[id]
+        if (!emoji) return false
+
+        const oldCategory = emoji.category
+
+        if (updates.name !== undefined) {
+            emoji.name = updates.name
+        }
+        if (updates.category !== undefined) {
+            emoji.category = updates.category
+        }
+        if (updates.tags !== undefined) {
+            emoji.tags = updates.tags
+        }
+
+        await this.ctx.database.upsert('emojiluna_emojis', [
+            {
+                id: emoji.id,
+                name: emoji.name,
+                category: emoji.category,
+                tags: JSON.stringify(emoji.tags)
+            }
+        ])
+
+        if (updates.category !== undefined && updates.category !== oldCategory) {
+            await this.updateCategoryEmojiCount(oldCategory)
+            await this.updateCategoryEmojiCount(emoji.category)
+        }
+
+        this.ctx.emit('emojiluna/emoji-updated', emoji)
+        return true
     }
 
     async getEmojiByName(name: string): Promise<EmojiItem | null> {
