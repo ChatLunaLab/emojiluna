@@ -12,19 +12,32 @@
                 <!-- Left: Preview -->
                 <div class="preview-side">
                     <div class="preview-card">
-                        <img :src="emojiUrl" :alt="emoji?.name" @error="handleImageError" />
+                        <img
+                            :src="emojiUrl"
+                            :alt="emoji?.name"
+                            @error="handleImageError"
+                        />
                     </div>
                     <div class="emoji-meta">
-                        <span class="meta-label">ID: {{ emoji?.id.slice(0, 8) }}...</span>
-                        <span class="meta-size" v-if="emoji?.size">{{ formatSize(emoji.size) }}</span>
+                        <span class="meta-label">
+                            ID: {{ emoji?.id.slice(0, 8) }}...
+                        </span>
+                        <span class="meta-size" v-if="emoji?.size">
+                            {{ formatSize(emoji.size) }}
+                        </span>
                     </div>
                 </div>
 
                 <!-- Right: Form -->
                 <div class="form-side">
                     <div class="form-group">
-                        <label class="form-label">{{ t('emojiluna.emojiName') }}</label>
-                        <el-input v-model="form.name" :placeholder="t('emojiluna.emojiName')">
+                        <label class="form-label">
+                            {{ t('emojiluna.emojiName') }}
+                        </label>
+                        <el-input
+                            v-model="form.name"
+                            :placeholder="t('emojiluna.emojiName')"
+                        >
                             <template #prefix>
                                 <el-icon><Picture /></el-icon>
                             </template>
@@ -32,7 +45,9 @@
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">{{ t('emojiluna.category') }}</label>
+                        <label class="form-label">
+                            {{ t('emojiluna.category') }}
+                        </label>
                         <el-select
                             v-model="form.category"
                             :placeholder="t('emojiluna.category')"
@@ -51,7 +66,9 @@
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">{{ t('emojiluna.tags.default') }}</label>
+                        <label class="form-label">
+                            {{ t('emojiluna.tags.default') }}
+                        </label>
                         <el-select
                             v-model="form.tags"
                             :placeholder="t('emojiluna.tags.default')"
@@ -77,12 +94,25 @@
 
         <template #footer>
             <div class="dialog-footer">
-                <el-button type="danger" text bg @click="handleDelete" class="delete-btn">
-                    <el-icon><Delete /></el-icon> {{ t('common.delete') }}
+                <el-button
+                    type="danger"
+                    text
+                    bg
+                    @click="handleDelete"
+                    class="delete-btn"
+                >
+                    <el-icon><Delete /></el-icon>
+                    {{ t('common.delete') }}
                 </el-button>
                 <div class="footer-actions">
-                    <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
-                    <el-button type="primary" @click="handleSave" :loading="loading">
+                    <el-button @click="handleClose">
+                        {{ t('common.cancel') }}
+                    </el-button>
+                    <el-button
+                        type="primary"
+                        @click="handleSave"
+                        :loading="loading"
+                    >
                         {{ t('common.save') }}
                     </el-button>
                 </div>
@@ -162,7 +192,8 @@ const loadData = async () => {
 
 const handleImageError = (event: Event) => {
     const img = event.target as HTMLImageElement
-    img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMiAyMEM0Mi40IDIwIDQ0IDMwIDQ0IDMwQzQ0IDMwIDQyLjQgNDAgMzIgNDBDMjEuNiA0MCAyMCAzMCAyMCAzMEMyMCAzMCAyMS42IDIwIDMyIDIwWiIgZmlsbD0iI0NDQ0NDQyIvPgo8L3N2Zz4K'
+    img.src =
+        'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMiAyMEM0Mi40IDIwIDQ0IDMwIDQ0IDMwQzQ0IDMwIDQyLjQgNDAgMzIgNDBDMjEuNiA0MCAyMCAzMCAyMCAzMEMyMCAzMCAyMS42IDIwIDMyIDIwWiIgZmlsbD0iI0NDQ0NDQyIvPgo8L3N2Zz4K'
 }
 
 const handleClose = () => {
@@ -184,17 +215,30 @@ const handleSave = async () => {
 
         // 更新名称
         if (nextName !== props.emoji.name) {
-            promises.push(send('emojiluna/updateEmojiName', props.emoji.id, nextName))
+            promises.push(
+                send('emojiluna/updateEmojiName', props.emoji.id, nextName)
+            )
         }
 
         // 更新分类
         if (form.category !== props.emoji.category) {
-            promises.push(send('emojiluna/updateEmojiCategory', props.emoji.id, form.category))
+            promises.push(
+                send(
+                    'emojiluna/updateEmojiCategory',
+                    props.emoji.id,
+                    form.category
+                )
+            )
         }
 
         // 更新标签
-        if (JSON.stringify(form.tags.sort()) !== JSON.stringify([...props.emoji.tags].sort())) {
-            promises.push(send('emojiluna/updateEmojiTags', props.emoji.id, form.tags))
+        if (
+            JSON.stringify(form.tags.sort()) !==
+            JSON.stringify([...props.emoji.tags].sort())
+        ) {
+            promises.push(
+                send('emojiluna/updateEmojiTags', props.emoji.id, form.tags)
+            )
         }
 
         if (promises.length > 0) {
@@ -226,7 +270,7 @@ const handleDelete = async () => {
             {
                 confirmButtonText: t('common.delete'),
                 cancelButtonText: t('common.cancel'),
-                type: 'warning',
+                type: 'warning'
             }
         )
 
@@ -236,7 +280,7 @@ const handleDelete = async () => {
         handleClose()
     } catch (error) {
         if (error !== 'cancel') {
-             ElMessage.error('删除失败')
+            ElMessage.error('删除失败')
         }
     }
 }

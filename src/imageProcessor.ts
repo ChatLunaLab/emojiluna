@@ -1,6 +1,6 @@
 import { createJimp } from '@jimp/core'
 import { defaultFormats, defaultPlugins } from 'jimp'
-import { parseGIF, decompressFrames } from 'gifuct-js'
+import { decompressFrames, parseGIF } from 'gifuct-js'
 
 const Jimp = createJimp({
     formats: [...defaultFormats],

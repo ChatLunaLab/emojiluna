@@ -4,16 +4,16 @@ import {
     AIAnalyzeResult,
     AICategorizeResult,
     AIImageFilterResult,
-    CategorySearchOptions,
     Category,
+    CategorySearchOptions,
     EmojiAddOptions,
     EmojiItem,
-    PaginatedResult,
     EmojiSearchOptions,
     FolderImportOptions,
     FolderImportResult,
     FolderScanResult,
     ImageContentType,
+    PaginatedResult,
     ScannedFile
 } from './types'
 import {
@@ -124,7 +124,9 @@ export class EmojiLunaService extends Service {
 
             // 单帧图片直接返回原始 base64
             if (metadata.frameCount <= 1) {
-                return [{ data: imageBase64, mimeType: `image/${metadata.format}` }]
+                return [
+                    { data: imageBase64, mimeType: `image/${metadata.format}` }
+                ]
             }
 
             // 多帧图片使用原始格式编码
@@ -135,7 +137,9 @@ export class EmojiLunaService extends Service {
             )
 
             if (frames.length === 0) {
-                return [{ data: imageBase64, mimeType: `image/${metadata.format}` }]
+                return [
+                    { data: imageBase64, mimeType: `image/${metadata.format}` }
+                ]
             }
 
             return frames.map((frame) => ({
@@ -169,7 +173,7 @@ export class EmojiLunaService extends Service {
                             type: 'text',
                             text: '请分析这个表情包'
                         },
-                        ...images.map(image => ({
+                        ...images.map((image) => ({
                             type: 'image_url',
                             image_url: {
                                 url: `data:${image.mimeType};base64,${image.data}`,
@@ -217,7 +221,7 @@ export class EmojiLunaService extends Service {
                             type: 'text',
                             text: '请分析这个表情包'
                         },
-                        ...images.map(image => ({
+                        ...images.map((image) => ({
                             type: 'image_url',
                             image_url: {
                                 url: `data:${image.mimeType};base64,${image.data}`,
@@ -265,7 +269,7 @@ export class EmojiLunaService extends Service {
                             type: 'text',
                             text: '请分析这个表情包'
                         },
-                        ...images.map(image => ({
+                        ...images.map((image) => ({
                             type: 'image_url',
                             image_url: {
                                 url: `data:${image.mimeType};base64,${image.data}`,
@@ -486,7 +490,8 @@ export class EmojiLunaService extends Service {
 
                         await this.updateEmojiInfo(task.id, {
                             name: aiResult.name || task.fallbackName,
-                            category: aiResult.category || task.fallbackCategory,
+                            category:
+                                aiResult.category || task.fallbackCategory,
                             tags: mergedTags
                         })
                     } catch (error) {
@@ -530,7 +535,10 @@ export class EmojiLunaService extends Service {
             }
         ])
 
-        if (updates.category !== undefined && updates.category !== oldCategory) {
+        if (
+            updates.category !== undefined &&
+            updates.category !== oldCategory
+        ) {
             await this.updateCategoryEmojiCount(oldCategory)
             await this.updateCategoryEmojiCount(emoji.category)
         }

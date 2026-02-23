@@ -36,7 +36,7 @@
             <div v-if="activeTab === 'upload'" class="mode-content fade-in">
                 <!-- Upload Area -->
                 <div class="upload-area-wrapper">
-                     <el-upload
+                    <el-upload
                         v-model:file-list="fileList"
                         action="#"
                         list-type="picture-card"
@@ -49,14 +49,18 @@
                             <div class="upload-icon-circle">
                                 <el-icon><Plus /></el-icon>
                             </div>
-                            <div class="upload-text">{{ t('emojiluna.dragOrClick') }}</div>
+                            <div class="upload-text">
+                                {{ t('emojiluna.dragOrClick') }}
+                            </div>
                         </div>
                     </el-upload>
                 </div>
 
                 <div class="form-grid">
                     <div class="form-group">
-                        <label class="form-label">{{ t('emojiluna.category') }}</label>
+                        <label class="form-label">
+                            {{ t('emojiluna.category') }}
+                        </label>
                         <el-select
                             v-model="form.category"
                             :placeholder="t('emojiluna.category')"
@@ -75,7 +79,9 @@
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">{{ t('emojiluna.tags.default') }}</label>
+                        <label class="form-label">
+                            {{ t('emojiluna.tags.default') }}
+                        </label>
                         <el-select
                             v-model="form.tags"
                             :placeholder="t('emojiluna.tags.default')"
@@ -97,14 +103,21 @@
                     </div>
                 </div>
 
-                <div class="ai-switch-wrapper" :class="{ active: form.aiAnalysis }">
+                <div
+                    class="ai-switch-wrapper"
+                    :class="{ active: form.aiAnalysis }"
+                >
                     <div class="ai-content">
                         <div class="ai-icon-box">
                             <el-icon><MagicStick /></el-icon>
                         </div>
                         <div class="ai-text">
-                            <div class="ai-title">{{ t('emojiluna.aiAnalysis') }}</div>
-                            <div class="ai-desc">{{ t('emojiluna.aiAnalysisDesc') }}</div>
+                            <div class="ai-title">
+                                {{ t('emojiluna.aiAnalysis') }}
+                            </div>
+                            <div class="ai-desc">
+                                {{ t('emojiluna.aiAnalysisDesc') }}
+                            </div>
                         </div>
                     </div>
                     <el-switch v-model="form.aiAnalysis" />
@@ -114,8 +127,10 @@
             <!-- URL Mode -->
             <div v-else class="mode-content fade-in">
                 <div class="form-group">
-                    <label class="form-label required">{{ t('emojiluna.imageUrl') }}</label>
-                     <el-input
+                    <label class="form-label required">
+                        {{ t('emojiluna.imageUrl') }}
+                    </label>
+                    <el-input
                         v-model="urlForm.url"
                         :placeholder="t('emojiluna.enterImageUrl')"
                         @input="handleUrlChange"
@@ -128,7 +143,10 @@
                 </div>
 
                 <!-- Preview -->
-                <div class="url-preview-container" :class="{ 'has-image': urlPreview }">
+                <div
+                    class="url-preview-container"
+                    :class="{ 'has-image': urlPreview }"
+                >
                     <img
                         v-if="urlPreview"
                         :src="urlForm.url"
@@ -144,13 +162,20 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label required">{{ t('emojiluna.emojiName') }}</label>
-                    <el-input v-model="urlForm.name" :placeholder="t('emojiluna.enterEmojiName')" />
+                    <label class="form-label required">
+                        {{ t('emojiluna.emojiName') }}
+                    </label>
+                    <el-input
+                        v-model="urlForm.name"
+                        :placeholder="t('emojiluna.enterEmojiName')"
+                    />
                 </div>
 
-                 <div class="form-grid">
+                <div class="form-grid">
                     <div class="form-group">
-                        <label class="form-label">{{ t('emojiluna.category') }}</label>
+                        <label class="form-label">
+                            {{ t('emojiluna.category') }}
+                        </label>
                         <el-select
                             v-model="urlForm.category"
                             :placeholder="t('emojiluna.category')"
@@ -169,7 +194,9 @@
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">{{ t('emojiluna.tags.default') }}</label>
+                        <label class="form-label">
+                            {{ t('emojiluna.tags.default') }}
+                        </label>
                         <el-select
                             v-model="urlForm.tags"
                             :placeholder="t('emojiluna.tags.default')"
@@ -195,7 +222,9 @@
 
         <template #footer>
             <div class="dialog-footer">
-                <el-button @click="handleClose" class="cancel-btn">{{ t('common.cancel') }}</el-button>
+                <el-button @click="handleClose" class="cancel-btn">
+                    {{ t('common.cancel') }}
+                </el-button>
                 <el-button
                     type="primary"
                     @click="handleSubmit"
@@ -215,7 +244,14 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { send } from '@koishijs/client'
 import { ElMessage, type UploadUserFile } from 'element-plus'
-import { UploadFilled, Plus, QuestionFilled, Link, MagicStick, Picture } from '@element-plus/icons-vue'
+import {
+    UploadFilled,
+    Plus,
+    QuestionFilled,
+    Link,
+    MagicStick,
+    Picture
+} from '@element-plus/icons-vue'
 import type { Category, EmojiAddOptions } from 'koishi-plugin-emojiluna'
 
 interface Props {
@@ -248,7 +284,7 @@ const fileList = ref<UploadUserFile[]>([])
 const form = reactive({
     category: '',
     tags: [] as string[],
-    aiAnalysis: true,
+    aiAnalysis: true
 })
 
 const urlForm = reactive({
@@ -313,7 +349,9 @@ const handleSubmit = async () => {
         }
 
         if (activeTab.value === 'upload' && form.aiAnalysis) {
-            ElMessage.success('上传成功，AI正在后台分析，请稍后再使用最新分类/标签检索')
+            ElMessage.success(
+                '上传成功，AI正在后台分析，请稍后再使用最新分类/标签检索'
+            )
         } else {
             ElMessage.success(t('emojiluna.addSuccess'))
         }
@@ -347,7 +385,7 @@ const submitFile = async () => {
                         name: file.name.replace(/\.[^/.]+$/, ''),
                         category: form.category || '其他',
                         tags: form.tags,
-                        imageData: base64,
+                        imageData: base64
                         //mimeType: file.raw.type,
                     })
                 }

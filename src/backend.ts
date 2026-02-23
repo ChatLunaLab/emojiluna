@@ -46,14 +46,11 @@ export async function applyBackend(ctx: Context, config: Config) {
 
             await refreshPromptVariable()
 
-            ctx.setInterval(
-                () => void refreshPromptVariable(),
-                1000 * 60 * 5
-            )
+            ctx.setInterval(() => refreshPromptVariable(), 1000 * 60 * 5)
 
-            ctx.on('emojiluna/emoji-added', () => void refreshPromptVariable())
-            ctx.on('emojiluna/emoji-updated', () => void refreshPromptVariable())
-            ctx.on('emojiluna/emoji-deleted', () => void refreshPromptVariable())
+            ctx.on('emojiluna/emoji-added', () => refreshPromptVariable())
+            ctx.on('emojiluna/emoji-updated', () => refreshPromptVariable())
+            ctx.on('emojiluna/emoji-deleted', () => refreshPromptVariable())
 
             ctx.effect(
                 () => () => ctx.chatluna.promptRenderer.removeVariable('emojis')

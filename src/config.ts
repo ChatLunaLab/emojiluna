@@ -21,7 +21,18 @@ export const Config = Schema.intersect([
         categories: Schema.array(Schema.string())
             .description('预定义分类')
             .role('table')
-            .default(['动漫角色', '游戏角色', '影视角色', '原创角色', '动物萌宠', '食物饮品', '日常物品', '文字表情', '真人表情', '其他']),
+            .default([
+                '动漫角色',
+                '游戏角色',
+                '影视角色',
+                '原创角色',
+                '动物萌宠',
+                '食物饮品',
+                '日常物品',
+                '文字表情',
+                '真人表情',
+                '其他'
+            ]),
         autoCategorize: Schema.boolean()
             .default(true)
             .description('是否启用AI自动分类'),
