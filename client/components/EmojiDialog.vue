@@ -36,7 +36,6 @@
                         </label>
                         <el-input
                             v-model="form.name"
-                            disabled
                             :placeholder="t('emojiluna.emojiName')"
                         >
                             <template #prefix>
@@ -166,7 +165,7 @@ const form = reactive({
 
 const emojiUrl = computed(() => {
     if (!props.emoji) return ''
-    return `${props.baseUrl}/get/${props.emoji.name}`
+    return `${props.baseUrl}/get/${props.emoji.id}`
 })
 
 const formatSize = (bytes: number) => {
@@ -204,9 +203,22 @@ const handleClose = () => {
 const handleSave = async () => {
     if (!props.emoji) return
 
+    const nextName = form.name.trim()
+    if (!nextName) {
+        ElMessage.warning(t('emojiluna.nameRequired'))
+        return
+    }
+
     loading.value = true
     try {
         const promises = []
+
+        // 更新名称
+        if (nextName !== props.emoji.name) {
+            promises.push(
+                send('emojiluna/updateEmojiName', props.emoji.id, nextName)
+            )
+        }
 
         // 更新分类
         if (form.category !== props.emoji.category) {
@@ -230,7 +242,11 @@ const handleSave = async () => {
         }
 
         if (promises.length > 0) {
-            await Promise.all(promises)
+            const results = await Promise.all(promises)
+            if (results.some((success) => success === false)) {
+                ElMessage.error(t('emojiluna.updateFailed'))
+                return
+            }
             ElMessage.success(t('emojiluna.updateSuccess'))
             emit('success')
             handleClose()

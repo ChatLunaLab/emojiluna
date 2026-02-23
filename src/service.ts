@@ -6,6 +6,7 @@ import {
     AICategorizeResult,
     AIImageFilterResult,
     Category,
+    CategorySearchOptions,
     EmojiAddOptions,
     EmojiItem,
     EmojiSearchOptions,
@@ -13,6 +14,7 @@ import {
     FolderImportResult,
     FolderScanResult,
     ImageContentType,
+    PaginatedResult,
     ScannedFile
 } from './types'
 import {
@@ -767,9 +769,18 @@ export class EmojiLunaService extends Service {
         return { success, failed }
     }
 
-    async getEmojiList(options: EmojiSearchOptions = {}): Promise<EmojiItem[]> {
-        const { category, tags, limit = undefined, offset = 0 } = options
+    private filterEmojis(options: EmojiSearchOptions = {}): EmojiItem[] {
+        const { keyword, category, tags } = options
         let emojis = Object.values(this._emojiStorage)
+
+        if (keyword?.trim()) {
+            const normalizedKeyword = keyword.trim()
+            emojis = emojis.filter(
+                (emoji) =>
+                    emoji.name.includes(normalizedKeyword) ||
+                    emoji.tags.some((tag) => tag.includes(normalizedKeyword))
+            )
+        }
 
         if (category) {
             emojis = emojis.filter((emoji) => emoji.category === category)
@@ -781,6 +792,13 @@ export class EmojiLunaService extends Service {
             )
         }
 
+        return emojis
+    }
+
+    async getEmojiList(options: EmojiSearchOptions = {}): Promise<EmojiItem[]> {
+        const { limit = undefined, offset = 0 } = options
+        const emojis = this.filterEmojis(options)
+
         if (!limit) {
             return emojis
         }
@@ -788,13 +806,23 @@ export class EmojiLunaService extends Service {
         return emojis.slice(offset, offset + limit)
     }
 
+    async getEmojiPage(
+        options: EmojiSearchOptions = {}
+    ): Promise<PaginatedResult<EmojiItem>> {
+        const limit = Math.max(1, options.limit ?? 50)
+        const offset = Math.max(0, options.offset ?? 0)
+        const filtered = this.filterEmojis(options)
+
+        return {
+            items: filtered.slice(offset, offset + limit),
+            total: filtered.length,
+            limit,
+            offset
+        }
+    }
+
     async searchEmoji(keyword: string): Promise<EmojiItem[]> {
-        const emojis = Object.values(this._emojiStorage)
-        return emojis.filter(
-            (emoji) =>
-                emoji.name.includes(keyword) ||
-                emoji.tags.some((tag) => tag.includes(keyword))
-        )
+        return this.filterEmojis({ keyword })
     }
 
     async getEmojiById(id: string): Promise<EmojiItem | null> {
@@ -864,6 +892,29 @@ export class EmojiLunaService extends Service {
         return Object.values(this._categories)
     }
 
+    async getCategoriesPage(
+        options: CategorySearchOptions = {}
+    ): Promise<PaginatedResult<Category>> {
+        const limit = Math.max(1, options.limit ?? 24)
+        const offset = Math.max(0, options.offset ?? 0)
+        const keyword = options.keyword?.trim().toLowerCase()
+
+        const categories = Object.values(this._categories).filter((cat) => {
+            if (!keyword) return true
+            return (
+                cat.name.toLowerCase().includes(keyword) ||
+                (cat.description || '').toLowerCase().includes(keyword)
+            )
+        })
+
+        return {
+            items: categories.slice(offset, offset + limit),
+            total: categories.length,
+            limit,
+            offset
+        }
+    }
+
     async getCategoryByName(name: string): Promise<Category | null> {
         return (
             Object.values(this._categories).find((cat) => cat.name === name) ||
@@ -871,7 +922,10 @@ export class EmojiLunaService extends Service {
         )
     }
 
-    async deleteCategory(id: string): Promise<boolean> {
+    async deleteCategory(
+        id: string,
+        deleteEmojis: boolean = false
+    ): Promise<boolean> {
         const category = this._categories[id]
         if (!category) return false
 
@@ -880,7 +934,16 @@ export class EmojiLunaService extends Service {
         )
 
         if (emojisInCategory.length > 0) {
-            throw new Error(`分类 ${category.name} 中还有表情包，无法删除`)
+            if (!deleteEmojis) {
+                throw new Error(`分类 ${category.name} 中还有表情包，无法删除`)
+            }
+
+            const results = await Promise.all(
+                emojisInCategory.map((emoji) => this.deleteEmoji(emoji.id))
+            )
+            if (results.some((success) => !success)) {
+                throw new Error(`分类 ${category.name} 下部分表情包删除失败`)
+            }
         }
 
         delete this._categories[id]
@@ -906,6 +969,30 @@ export class EmojiLunaService extends Service {
             {
                 id: emoji.id,
                 tags: JSON.stringify(emoji.tags)
+            }
+        ])
+
+        this.ctx.emit('emojiluna/emoji-updated', emoji)
+        return true
+    }
+
+    async updateEmojiName(id: string, name: string): Promise<boolean> {
+        const emoji = this._emojiStorage[id]
+        const nextName = name.trim()
+        if (!emoji || !nextName) return false
+
+        if (emoji.name === nextName) return true
+
+        const duplicated = Object.values(this._emojiStorage).some(
+            (item) => item.id !== id && item.name === nextName
+        )
+        if (duplicated) return false
+
+        emoji.name = nextName
+        await this.ctx.database.upsert('emojiluna_emojis', [
+            {
+                id: emoji.id,
+                name: emoji.name
             }
         ])
 

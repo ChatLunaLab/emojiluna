@@ -101,6 +101,19 @@
             </div>
         </div>
 
+        <div class="pagination" v-if="total > pageSize">
+            <el-pagination
+                v-model:current-page="currentPage"
+                v-model:page-size="pageSize"
+                :page-sizes="[12, 24, 48]"
+                :total="total"
+                layout="prev, pager, next"
+                @size-change="handleSizeChange"
+                @current-change="handleCurrentChange"
+                background
+            />
+        </div>
+
         <!-- Add/Edit Dialog -->
         <el-dialog
             v-model="showEditDialog"
@@ -181,6 +194,9 @@ const categories = ref<Category[]>([])
 const categoryCovers = ref<Record<string, EmojiItem>>({}) // Map category name to cover emoji
 const searchKeyword = ref('')
 const baseUrl = ref('/emojiluna')
+const total = ref(0)
+const currentPage = ref(1)
+const pageSize = ref(24)
 
 // Dialog State
 const showAddDialog = ref(false)
@@ -224,12 +240,19 @@ const filteredCategories = computed(() => {
 const loadCategories = async () => {
     loading.value = true
     try {
-        const [categoriesData, baseUrlData] = await Promise.all([
-            send('emojiluna/getCategories'),
+        const keyword = searchKeyword.value.trim() || undefined
+        const [categoriesPage, baseUrlData] = await Promise.all([
+            send('emojiluna/getCategoriesPage', {
+                keyword,
+                limit: pageSize.value,
+                offset: (currentPage.value - 1) * pageSize.value
+            }),
             send('emojiluna/getBaseUrl')
         ])
-        categories.value = categoriesData || []
+        categories.value = categoriesPage?.items || []
+        total.value = categoriesPage?.total || 0
         baseUrl.value = baseUrlData || '/emojiluna'
+        categoryCovers.value = {}
     } catch (error) {
         console.error('Failed to load categories:', error)
         ElMessage.error('加载分类失败')
@@ -260,11 +283,23 @@ const refreshData = () => {
 }
 
 const handleSearch = () => {
-    // Client side filtering is enough for categories usually
+    currentPage.value = 1
+    loadCategories()
+}
+
+const handleSizeChange = (newSize: number) => {
+    pageSize.value = newSize
+    currentPage.value = 1
+    loadCategories()
+}
+
+const handleCurrentChange = (newPage: number) => {
+    currentPage.value = newPage
+    loadCategories()
 }
 
 const getEmojiUrl = (emoji: EmojiItem) => {
-    return `${baseUrl.value}/get/${emoji.name}`
+    return `${baseUrl.value}/get/${emoji.id}`
 }
 
 const handleImageError = (event: Event) => {
@@ -521,5 +556,11 @@ onMounted(() => {
 
 .no-data {
     margin-top: 40px;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    padding: 20px 0;
 }
 </style>

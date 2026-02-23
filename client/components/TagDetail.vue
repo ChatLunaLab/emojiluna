@@ -26,6 +26,15 @@
                 </el-button>
 
                 <template v-if="!isSelectionMode">
+                    <el-button
+                        type="danger"
+                        plain
+                        @click="handleDeleteCurrentTag"
+                        :loading="processing"
+                    >
+                        <el-icon><Delete /></el-icon>
+                        删除标签
+                    </el-button>
                     <el-button @click="showImportDialog = true">
                         <el-icon><Plus /></el-icon>
                         添加表情包
@@ -227,7 +236,7 @@ import {
 import EmojiCard from './EmojiCard.vue'
 import EmojiDialog from './EmojiDialog.vue'
 import ImageSelector from './ImageSelector.vue'
-import type { EmojiItem } from 'koishi-plugin-emojiluna'
+import type { EmojiItem, EmojiSearchOptions } from 'koishi-plugin-emojiluna'
 import { useDragSelect } from '../composables/useDragSelect'
 
 const { t } = useI18n()
@@ -293,7 +302,7 @@ const { isDragSelecting, selectionBox, handleMouseDown } = useDragSelect(
 
 const previewEmojiUrl = computed(() => {
     if (!previewEmoji.value) return ''
-    return `${baseUrl.value}/get/${previewEmoji.value.name}`
+    return `${baseUrl.value}/get/${previewEmoji.value.id}`
 })
 
 const loadEmojis = async () => {
@@ -301,33 +310,19 @@ const loadEmojis = async () => {
 
     loading.value = true
     try {
-        const options = {
+        const options: EmojiSearchOptions = {
             tags: [props.tagName],
             limit: pageSize.value,
             offset: (currentPage.value - 1) * pageSize.value
         }
 
-        let result
         if (searchKeyword.value.trim()) {
-            const allResults = await send(
-                'emojiluna/searchEmoji',
-                searchKeyword.value.trim()
-            )
-            result =
-                allResults?.filter((emoji: EmojiItem) =>
-                    emoji.tags.includes(props.tagName)
-                ) || []
-            emojis.value = result
-            total.value = result.length
-        } else {
-            result = await send('emojiluna/getEmojiList', options)
-            emojis.value = result || []
-
-            const allInTag = await send('emojiluna/getEmojiList', {
-                tags: [props.tagName]
-            })
-            total.value = allInTag?.length || 0
+            options.keyword = searchKeyword.value.trim()
         }
+
+        const page = await send('emojiluna/getEmojiPage', options)
+        emojis.value = page?.items || []
+        total.value = page?.total || 0
 
         if (!baseUrl.value) {
             baseUrl.value = (await send('emojiluna/getBaseUrl')) || '/emojiluna'
@@ -454,6 +449,47 @@ const handleBatchRemoveTag = async () => {
         refreshData()
     } catch (e) {
         console.error(e)
+    } finally {
+        processing.value = false
+    }
+}
+
+const handleDeleteCurrentTag = async () => {
+    if (!props.tagName) return
+
+    try {
+        const emojisWithTag: EmojiItem[] =
+            (await send('emojiluna/getEmojiList', { tags: [props.tagName] })) ||
+            []
+        const count = emojisWithTag.length
+
+        await ElMessageBox.confirm(
+            `确定要删除标签 #${props.tagName} 吗？${count > 0 ? `\n这会从 ${count} 个表情包中移除此标签。` : ''}`,
+            '警告',
+            {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                type: 'warning'
+            }
+        )
+
+        processing.value = true
+        await Promise.all(
+            emojisWithTag.map((emoji) => {
+                const newTags = emoji.tags.filter(
+                    (tag) => tag !== props.tagName
+                )
+                return send('emojiluna/updateEmojiTags', emoji.id, newTags)
+            })
+        )
+
+        ElMessage.success('标签删除成功')
+        emit('back')
+    } catch (error) {
+        if (error !== 'cancel') {
+            console.error('Failed to delete tag:', error)
+            ElMessage.error('删除标签失败')
+        }
     } finally {
         processing.value = false
     }
