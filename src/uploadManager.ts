@@ -191,7 +191,7 @@ export class UploadManager {
 
         try {
             await fs.mkdir(tempDir, { recursive: true })
-        } catch (_) { }
+        } catch (_) {}
 
         const tempPath = path.join(tempDir, `${id}-upload-temp`)
         await fs.writeFile(tempPath, imageData)
@@ -211,7 +211,7 @@ export class UploadManager {
                 await fs.copyFile(sourcePath, destPath)
                 try {
                     await fs.unlink(sourcePath)
-                } catch (_) { }
+                } catch (_) {}
             } else {
                 throw error
             }
@@ -224,7 +224,7 @@ export class UploadManager {
     async cleanupTempFile(tempPath: string): Promise<void> {
         try {
             await fs.unlink(tempPath)
-        } catch (_) { }
+        } catch (_) {}
     }
 
     /**
@@ -332,7 +332,10 @@ export class UploadManager {
         failed: number
         paused: boolean
     } {
-        let pending = 0, processing = 0, succeeded = 0, failed = 0
+        let pending = 0,
+            processing = 0,
+            succeeded = 0,
+            failed = 0
         for (const task of this._aiTasksMap.values()) {
             if (task.status === 'pending') pending++
             else if (task.status === 'processing') processing++
@@ -353,8 +356,8 @@ export class UploadManager {
      */
     getFailedAIEmojiIds(): string[] {
         return Array.from(this._aiTasksMap.values())
-            .filter(t => t.status === 'failed')
-            .map(t => t.emojiId)
+            .filter((t) => t.status === 'failed')
+            .map((t) => t.emojiId)
     }
 
     async getAiTasksAll(): Promise<AITaskDetail[]> {
@@ -362,7 +365,9 @@ export class UploadManager {
         if (this._taskProcessor) {
             for (const item of result) {
                 if (!item.name) {
-                    const emoji = await this._taskProcessor.getEmojiById(item.emojiId)
+                    const emoji = await this._taskProcessor.getEmojiById(
+                        item.emojiId
+                    )
                     if (emoji) {
                         item.name = emoji.name
                     }
@@ -373,7 +378,9 @@ export class UploadManager {
     }
 
     deleteAiTask(emojiId: string): void {
-        this._aiTaskQueue = this._aiTaskQueue.filter(t => t.emojiId !== emojiId)
+        this._aiTaskQueue = this._aiTaskQueue.filter(
+            (t) => t.emojiId !== emojiId
+        )
         this._aiTasksMap.delete(emojiId)
     }
 

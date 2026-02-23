@@ -5,6 +5,7 @@ import {
     AIAnalyzeResult,
     AICategorizeResult,
     AIImageFilterResult,
+    AITaskDetail,
     Category,
     CategorySearchOptions,
     EmojiAddOptions,
@@ -16,7 +17,8 @@ import {
     ImageContentType,
     PaginatedResult,
     ScannedFile,
-    AITaskDetail
+    TagInfo,
+    TagSearchOptions
 } from './types'
 import {
     chunkArray,
@@ -355,7 +357,7 @@ export class EmojiLunaService extends Service {
         if (validationError) {
             try {
                 await fs.unlink(sourcePath)
-            } catch (_) { }
+            } catch (_) {}
             throw new Error(validationError)
         }
 
@@ -959,6 +961,89 @@ export class EmojiLunaService extends Service {
             emoji.tags.forEach((tag) => tags.add(tag))
         })
         return Array.from(tags)
+    }
+
+    async getTagsPage(
+        options: TagSearchOptions = {}
+    ): Promise<PaginatedResult<TagInfo>> {
+        const limit = Math.max(1, options.limit ?? 24)
+        const offset = Math.max(0, options.offset ?? 0)
+        const keyword = options.keyword?.trim().toLowerCase()
+        const tagUsageMap = new Map<string, number>()
+
+        Object.values(this._emojiStorage).forEach((emoji) => {
+            emoji.tags.forEach((tag) => {
+                const normalizedTag = tag.trim()
+                if (!normalizedTag) return
+                tagUsageMap.set(
+                    normalizedTag,
+                    (tagUsageMap.get(normalizedTag) || 0) + 1
+                )
+            })
+        })
+
+        const tags = Array.from(tagUsageMap.entries())
+            .map(([name, usage]) => ({ name, usage }))
+            .filter((tag) => {
+                if (!keyword) return true
+                return tag.name.toLowerCase().includes(keyword)
+            })
+            .sort((a, b) => b.usage - a.usage)
+
+        return {
+            items: tags.slice(offset, offset + limit),
+            total: tags.length,
+            limit,
+            offset
+        }
+    }
+
+    async cleanupEmptyCategories(): Promise<number> {
+        const emptyCategories = Object.values(this._categories).filter(
+            (category) => category.emojiCount <= 0
+        )
+
+        for (const category of emptyCategories) {
+            delete this._categories[category.id]
+            await this.ctx.database.remove('emojiluna_categories', {
+                id: category.id
+            })
+            this.ctx.emit('emojiluna/category-deleted', category.id)
+        }
+
+        return emptyCategories.length
+    }
+
+    async cleanupEmptyTags(): Promise<number> {
+        const tagUsageMap = new Map<string, number>()
+
+        Object.values(this._emojiStorage).forEach((emoji) => {
+            emoji.tags.forEach((tag) => {
+                const normalizedTag = tag.trim()
+                if (!normalizedTag) return
+                tagUsageMap.set(
+                    normalizedTag,
+                    (tagUsageMap.get(normalizedTag) || 0) + 1
+                )
+            })
+        })
+
+        let cleanedCount = 0
+        for (const emoji of Object.values(this._emojiStorage)) {
+            const cleanedTags = emoji.tags.filter((tag) => {
+                const normalizedTag = tag.trim()
+                return (
+                    normalizedTag && (tagUsageMap.get(normalizedTag) || 0) > 0
+                )
+            })
+            if (cleanedTags.length !== emoji.tags.length) {
+                const removedCount = emoji.tags.length - cleanedTags.length
+                await this.updateEmojiTags(emoji.id, cleanedTags)
+                cleanedCount += removedCount
+            }
+        }
+
+        return cleanedCount
     }
 
     async updateEmojiTags(id: string, tags: string[]): Promise<boolean> {

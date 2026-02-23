@@ -37,6 +37,13 @@
                     </el-button>
                     <el-button
                         circle
+                        @click="handleCleanupEmptyCategories"
+                        title="清理空分类"
+                    >
+                        <el-icon><Delete /></el-icon>
+                    </el-button>
+                    <el-button
+                        circle
                         @click="refreshData"
                         :title="t('common.refresh')"
                     >
@@ -477,6 +484,21 @@ const handleBatchDeleteCategories = async () => {
             console.error('Failed to batch delete categories:', error)
             ElMessage.error('批量删除分类失败')
         }
+    }
+}
+
+const handleCleanupEmptyCategories = async () => {
+    try {
+        const cleanedCount = await send('emojiluna/cleanupEmptyCategories')
+        if (cleanedCount > 0) {
+            ElMessage.success(`已清理 ${cleanedCount} 个空分类`)
+        } else {
+            ElMessage.info('没有可清理的空分类')
+        }
+        await loadCategories()
+    } catch (error) {
+        console.error('Failed to cleanup empty categories:', error)
+        ElMessage.error('清理空分类失败')
     }
 }
 

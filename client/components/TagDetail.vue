@@ -18,11 +18,15 @@
             </div>
             <div class="header-right">
                 <el-button
-                    :type="isSelectionMode ? 'primary' : 'default'"
-                    text
+                    v-if="!isSelectionMode"
+                    type="primary"
+                    plain
                     @click="toggleSelectionMode"
                 >
-                    {{ isSelectionMode ? t('common.cancel') : '选择' }}
+                    选择
+                </el-button>
+                <el-button v-else type="danger" @click="toggleSelectionMode">
+                    {{ t('common.cancel') }}
                 </el-button>
 
                 <template v-if="!isSelectionMode">

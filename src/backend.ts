@@ -5,10 +5,10 @@ import {
     EmojiSearchOptions,
     FolderImportOptions
 } from '.'
-import type { } from '@koishijs/plugin-server'
+import type {} from '@koishijs/plugin-server'
 import Koa from 'koa'
 import fs from 'fs/promises'
-import type { } from '@koishijs/plugin-console'
+import type {} from '@koishijs/plugin-console'
 import { resolve } from 'path'
 import { getImageType } from './utils'
 import formidable from 'formidable'
@@ -113,6 +113,13 @@ export async function applyBackend(ctx: Context, runtimeConfig: Config) {
         })
 
         ctx.console.addListener(
+            'emojiluna/getTagsPage',
+            async (options = {}) => {
+                return await ctx.emojiluna.getTagsPage(options)
+            }
+        )
+
+        ctx.console.addListener(
             'emojiluna/updateEmojiName',
             async (id, name) => {
                 return await ctx.emojiluna.updateEmojiName(id, name)
@@ -150,6 +157,17 @@ export async function applyBackend(ctx: Context, runtimeConfig: Config) {
                 return await ctx.emojiluna.deleteCategory(id, deleteEmojis)
             }
         )
+
+        ctx.console.addListener(
+            'emojiluna/cleanupEmptyCategories',
+            async () => {
+                return await ctx.emojiluna.cleanupEmptyCategories()
+            }
+        )
+
+        ctx.console.addListener('emojiluna/cleanupEmptyTags', async () => {
+            return await ctx.emojiluna.cleanupEmptyTags()
+        })
 
         ctx.console.addListener('emojiluna/addEmoji', async (emojiData) => {
             // 处理base64图片数据
@@ -310,13 +328,19 @@ export async function applyBackend(ctx: Context, runtimeConfig: Config) {
             return await ctx.emojiluna.getAiTasksAll()
         })
 
-        ctx.console.addListener('emojiluna/deleteAiTask', async (emojiId: string) => {
-            return await ctx.emojiluna.deleteAiTask(emojiId)
-        })
+        ctx.console.addListener(
+            'emojiluna/deleteAiTask',
+            async (emojiId: string) => {
+                return await ctx.emojiluna.deleteAiTask(emojiId)
+            }
+        )
 
-        ctx.console.addListener('emojiluna/retryAiTask', async (emojiId: string) => {
-            return await ctx.emojiluna.retryAiTask(emojiId)
-        })
+        ctx.console.addListener(
+            'emojiluna/retryAiTask',
+            async (emojiId: string) => {
+                return await ctx.emojiluna.retryAiTask(emojiId)
+            }
+        )
 
         // Folder import endpoints
         ctx.console.addListener(

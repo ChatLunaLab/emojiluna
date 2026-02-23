@@ -21,12 +21,10 @@
             <div class="header-right">
                 <el-button
                     :type="isSelectionMode ? 'danger' : 'default'"
-                    circle
                     @click="toggleSelectionMode"
-                    :title="isSelectionMode ? t('common.cancel') : '选择'"
+                    :plain="!isSelectionMode"
                 >
-                    <el-icon v-if="isSelectionMode"><Close /></el-icon>
-                    <el-icon v-else><Check /></el-icon>
+                    {{ isSelectionMode ? t('common.cancel') : '选择' }}
                 </el-button>
 
                 <template v-if="!isSelectionMode">
@@ -301,9 +299,7 @@ import {
     MagicStick,
     FolderOpened,
     Delete,
-    Download,
-    Check,
-    Close
+    Download
 } from '@element-plus/icons-vue'
 import EmojiCard from './EmojiCard.vue'
 import EmojiDialog from './EmojiDialog.vue'

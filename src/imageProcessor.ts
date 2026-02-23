@@ -119,12 +119,29 @@ export async function extractSampledFrames(
     sampleCount: number,
     outputFormat: 'png' | 'jpeg' | 'webp' = 'png'
 ): Promise<{ frames: Buffer[]; metadata: ImageMetadata }> {
-    const metadata = await getImageMetadata(buffer)
-    const indices = sampleFrameIndices(metadata.frameCount, sampleCount)
-    const decodedFrames = await decodeFrames(buffer, metadata, indices)
+    const sourceMetadata = await getImageMetadata(buffer)
+    const indices = sampleFrameIndices(sourceMetadata.frameCount, sampleCount)
+    const decodedFrames = await decodeFrames(buffer, sourceMetadata, indices)
+    const normalizedOutputFormat =
+        sourceMetadata.format === 'gif' ? 'png' : outputFormat
     const frames = await Promise.all(
-        decodedFrames.map((frame) => encodeFrame(frame, outputFormat))
+        decodedFrames.map((frame) => encodeFrame(frame, normalizedOutputFormat))
     )
+
+    const firstFrame = decodedFrames[0]
+    const metadata: ImageMetadata = firstFrame
+        ? {
+              format: normalizedOutputFormat,
+              width: firstFrame.width,
+              height: firstFrame.height,
+              frameCount: 1
+          }
+        : {
+              format: normalizedOutputFormat,
+              width: sourceMetadata.width,
+              height: sourceMetadata.height,
+              frameCount: 1
+          }
 
     return { frames, metadata }
 }

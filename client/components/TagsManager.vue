@@ -35,6 +35,13 @@
                     >
                         <el-icon><Plus /></el-icon>
                     </el-button>
+                    <el-button
+                        circle
+                        @click="handleCleanupEmptyTags"
+                        title="清理空标签"
+                    >
+                        <el-icon><Delete /></el-icon>
+                    </el-button>
                     <el-button circle @click="refreshData" title="刷新">
                         <el-icon><RefreshRight /></el-icon>
                     </el-button>
@@ -44,9 +51,9 @@
 
         <!-- Tags Grid -->
         <div class="tags-grid-container" v-loading="loading">
-            <div v-if="filteredTags.length > 0" class="tags-grid">
+            <div v-if="tags.length > 0" class="tags-grid">
                 <div
-                    v-for="tag in filteredTags"
+                    v-for="tag in tags"
                     :key="tag.name"
                     class="album-card"
                     :class="{ selected: isSelected(tag) }"
@@ -110,6 +117,19 @@
             <div v-else class="no-data">
                 <el-empty description="暂无标签" />
             </div>
+        </div>
+
+        <div class="pagination" v-if="total > pageSize">
+            <el-pagination
+                v-model:current-page="currentPage"
+                v-model:page-size="pageSize"
+                :page-sizes="[12, 24, 48]"
+                :total="total"
+                layout="prev, pager, next"
+                @size-change="handleSizeChange"
+                @current-change="handleCurrentChange"
+                background
+            />
         </div>
 
         <Transition name="slide-up">
@@ -188,13 +208,8 @@ import {
     Check,
     Close
 } from '@element-plus/icons-vue'
-import type { EmojiItem } from 'koishi-plugin-emojiluna'
+import type { EmojiItem, TagInfo } from 'koishi-plugin-emojiluna'
 import type { FormInstance, FormRules } from 'element-plus'
-
-interface TagInfo {
-    name: string
-    usage: number
-}
 
 const emit = defineEmits<{
     (e: 'tag-click', tag: string): void
@@ -207,6 +222,9 @@ const tags = ref<TagInfo[]>([])
 const tagCovers = ref<Record<string, EmojiItem>>({})
 const searchKeyword = ref('')
 const baseUrl = ref('/emojiluna')
+const total = ref(0)
+const currentPage = ref(1)
+const pageSize = ref(24)
 const isSelectionMode = ref(false)
 const selectedTagNames = ref<Set<string>>(new Set())
 
@@ -232,15 +250,6 @@ const tagFormRules: FormRules = {
 }
 
 // Computed
-const filteredTags = computed(() => {
-    if (!searchKeyword.value.trim()) {
-        return tags.value
-    }
-    return tags.value.filter((tag) =>
-        tag.name.toLowerCase().includes(searchKeyword.value.toLowerCase())
-    )
-})
-
 const selectedTags = computed(() => {
     return tags.value.filter((tag) => selectedTagNames.value.has(tag.name))
 })
@@ -249,39 +258,21 @@ const selectedTags = computed(() => {
 const loadTags = async () => {
     loading.value = true
     try {
-        const [allTagsData, allEmojis, baseUrlData] = await Promise.all([
-            send('emojiluna/getAllTags'),
-            send('emojiluna/getEmojiList', {}),
+        const keyword = searchKeyword.value.trim() || undefined
+        const [tagsPage, baseUrlData] = await Promise.all([
+            send('emojiluna/getTagsPage', {
+                keyword,
+                limit: pageSize.value,
+                offset: (currentPage.value - 1) * pageSize.value
+            }),
             send('emojiluna/getBaseUrl')
         ])
 
         baseUrl.value = baseUrlData || '/emojiluna'
 
-        const tagUsageMap = new Map<string, number>()
-        const tagFirstEmoji = new Map<string, EmojiItem>()
-
-        if (allTagsData) {
-            allTagsData.forEach((t: string) => tagUsageMap.set(t, 0))
-        }
-
-        if (allEmojis) {
-            allEmojis.forEach((emoji: EmojiItem) => {
-                emoji.tags.forEach((t: string) => {
-                    const current = tagUsageMap.get(t) || 0
-                    tagUsageMap.set(t, current + 1)
-                    if (!tagFirstEmoji.has(t)) {
-                        tagFirstEmoji.set(t, emoji)
-                    }
-                })
-            })
-        }
-
-        tags.value = Array.from(tagUsageMap.entries())
-            .map(([name, usage]) => ({
-                name,
-                usage
-            }))
-            .sort((a, b) => b.usage - a.usage)
+        tags.value = tagsPage?.items || []
+        total.value = tagsPage?.total || 0
+        tagCovers.value = {}
 
         const currentNames = new Set(tags.value.map((tag) => tag.name))
         selectedTagNames.value = new Set(
@@ -290,10 +281,19 @@ const loadTags = async () => {
             )
         )
 
-        // Set covers
-        tagFirstEmoji.forEach((emoji, tag) => {
-            tagCovers.value[tag] = emoji
-        })
+        await Promise.all(
+            tags.value.map(async (tag) => {
+                if (tag.usage <= 0) return
+                const result: EmojiItem[] =
+                    (await send('emojiluna/getEmojiList', {
+                        tags: [tag.name],
+                        limit: 1
+                    })) || []
+                if (result.length > 0) {
+                    tagCovers.value[tag.name] = result[0]
+                }
+            })
+        )
     } catch (error) {
         console.error('Failed to load tags:', error)
         ElMessage.error('加载标签失败')
@@ -307,7 +307,19 @@ const refreshData = () => {
 }
 
 const handleSearch = () => {
-    // Client side filtering
+    currentPage.value = 1
+    loadTags()
+}
+
+const handleSizeChange = (newSize: number) => {
+    pageSize.value = newSize
+    currentPage.value = 1
+    loadTags()
+}
+
+const handleCurrentChange = (newPage: number) => {
+    currentPage.value = newPage
+    loadTags()
 }
 
 const getEmojiUrl = (emoji: EmojiItem) => {
@@ -439,6 +451,21 @@ const handleBatchDeleteTags = async () => {
             console.error('Failed to batch delete tags:', error)
             ElMessage.error('批量删除标签失败')
         }
+    }
+}
+
+const handleCleanupEmptyTags = async () => {
+    try {
+        const cleanedCount = await send('emojiluna/cleanupEmptyTags')
+        if (cleanedCount > 0) {
+            ElMessage.success(`已清理 ${cleanedCount} 个空标签`)
+        } else {
+            ElMessage.info('没有可清理的空标签')
+        }
+        await loadTags()
+    } catch (error) {
+        console.error('Failed to cleanup empty tags:', error)
+        ElMessage.error('清理空标签失败')
     }
 }
 
@@ -675,6 +702,12 @@ onMounted(() => {
 
 .no-data {
     margin-top: 40px;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    padding: 20px 0;
 }
 
 .floating-action-bar {
