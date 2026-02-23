@@ -179,6 +179,7 @@
                         :alt="previewEmoji?.name"
                         class="preview-image"
                         @error="handlePreviewImageError"
+                        @click="openPreviewLink"
                     />
                 </div>
 
@@ -537,6 +538,11 @@ const handlePreviewImageError = (e: Event) => {
         'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMiAyMEM0Mi40IDIwIDQ0IDMwIDQ0IDMwQzQ0IDMwIDQyLjQgNDAgMzIgNDBDMjEuNiA0MCAyMCAzMCAyMCAzMEMyMCAzMCAyMS42IDIwIDMyIDIwWiIgZmlsbD0iI0NDQ0NDQyIvPgo8L3N2Zz4K'
 }
 
+const openPreviewLink = () => {
+    if (!previewEmojiUrl.value) return
+    window.open(previewEmojiUrl.value, '_blank', 'noopener,noreferrer')
+}
+
 watch(
     () => props.tagName,
     (val) => {
@@ -687,6 +693,7 @@ onMounted(() => loadEmojis())
     max-height: 200px;
     border-radius: 4px;
     object-fit: contain;
+    cursor: zoom-in;
 }
 .preview-info {
     display: flex;

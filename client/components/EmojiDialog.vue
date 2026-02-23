@@ -16,6 +16,7 @@
                             :src="emojiUrl"
                             :alt="emoji?.name"
                             @error="handleImageError"
+                            @click="openEmojiLink"
                         />
                     </div>
                     <div class="emoji-meta">
@@ -36,7 +37,6 @@
                         </label>
                         <el-input
                             v-model="form.name"
-                            disabled
                             :placeholder="t('emojiluna.emojiName')"
                         >
                             <template #prefix>
@@ -197,6 +197,11 @@ const handleImageError = (event: Event) => {
         'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMiAyMEM0Mi40IDIwIDQ0IDMwIDQ0IDMwQzQ0IDMwIDQyLjQgNDAgMzIgNDBDMjEuNiA0MCAyMCAzMCAyMCAzMEMyMCAzMCAyMS42IDIwIDMyIDIwWiIgZmlsbD0iI0NDQ0NDQyIvPgo8L3N2Zz4K'
 }
 
+const openEmojiLink = () => {
+    if (!emojiUrl.value) return
+    window.open(emojiUrl.value, '_blank', 'noopener,noreferrer')
+}
+
 const handleClose = () => {
     visible.value = false
 }
@@ -349,6 +354,7 @@ onMounted(() => {
     max-height: 100%;
     object-fit: contain;
     transition: transform 0.3s ease;
+    cursor: zoom-in;
 }
 
 .preview-card:hover img {

@@ -96,12 +96,22 @@
                         :content="t('emojiluna.aiTasksDetails', 'AI 任务详情')"
                         placement="bottom"
                     >
-                        <el-badge :value="aiStats.failed || aiStats.processing" :type="aiStats.failed ? 'danger' : 'primary'" :hidden="totalTasks === 0">
+                        <el-badge
+                            :value="aiStats.failed || aiStats.processing"
+                            :type="aiStats.failed ? 'danger' : 'primary'"
+                            :hidden="totalTasks === 0"
+                        >
                             <el-button
                                 circle
                                 @click="aiControlVisible = true"
-                                :class="{'running-animation': aiStats.processing > 0 && !aiStats.paused}"
-                                :title="t('emojiluna.aiTasksDetails', 'AI 任务详情')"
+                                :class="{
+                                    'running-animation':
+                                        aiStats.processing > 0 &&
+                                        !aiStats.paused
+                                }"
+                                :title="
+                                    t('emojiluna.aiTasksDetails', 'AI 任务详情')
+                                "
                             >
                                 <el-icon>
                                     <MagicStick v-if="!aiStats.paused" />
@@ -289,6 +299,7 @@
                                 :alt="previewEmoji?.name"
                                 class="preview-image"
                                 @error="handlePreviewImageError"
+                                @click="openPreviewLink"
                             />
                         </div>
                         <div class="image-meta">
@@ -348,13 +359,21 @@
                             <label class="detail-label">
                                 {{ t('emojiluna.link') }}
                             </label>
-                            <div class="link-box" @click="copyPreviewLink">
+                            <div class="link-box" @click="openPreviewLink">
                                 <span class="link-text">
                                     {{ previewEmojiLink }}
                                 </span>
-                                <el-icon class="copy-icon">
-                                    <DocumentCopy />
-                                </el-icon>
+                                <el-button
+                                    text
+                                    size="small"
+                                    class="copy-link-btn"
+                                    @click.stop="copyPreviewLink"
+                                >
+                                    <el-icon class="copy-icon">
+                                        <DocumentCopy />
+                                    </el-icon>
+                                    复制
+                                </el-button>
                             </div>
                         </div>
                     </div>
@@ -857,12 +876,22 @@ const handlePreviewImageError = (event: Event) => {
         'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMiAyMEM0Mi40IDIwIDQ0IDMwIDQ0IDMwQzQ0IDMwIDQyLjQgNDAgMzIgNDBDMjEuNiA0MCAyMCAzMCAyMCAzMEMyMCAzMCAyMS42IDIwIDMyIDIwWiIgZmlsbD0iI0NDQ0NDQyIvPgo8L3N2Zz4K'
 }
 
+const openPreviewLink = () => {
+    if (!previewEmojiLink.value) return
+    window.open(previewEmojiLink.value, '_blank', 'noopener,noreferrer')
+}
+
 const copyPreviewLink = async () => {
     if (!previewEmojiLink.value) return
 
     try {
-        await navigator.clipboard.writeText(previewEmojiLink.value)
-        ElMessage.success('链接已复制到剪贴板')
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(previewEmojiLink.value)
+            ElMessage.success('链接已复制到剪贴板')
+            return
+        }
+
+        throw new Error('Clipboard API unavailable')
     } catch (error) {
         // Fallback for browsers that don't support clipboard API
         const textArea = document.createElement('textarea')
@@ -874,7 +903,8 @@ const copyPreviewLink = async () => {
         textArea.focus()
         textArea.select()
         try {
-            document.execCommand('copy')
+            const copied = document.execCommand('copy')
+            if (!copied) throw new Error('execCommand returned false')
             ElMessage.success('链接已复制到剪贴板')
         } catch (err) {
             ElMessage.error('复制失败，请手动复制')
@@ -1142,6 +1172,7 @@ const getStatus = (emoji: EmojiItem): 'pending' | 'failed' | undefined => {
     max-height: 100%;
     object-fit: contain;
     transition: transform 0.3s ease;
+    cursor: zoom-in;
 }
 
 .image-box:hover .preview-image {
@@ -1234,6 +1265,11 @@ const getStatus = (emoji: EmojiItem): 'pending' | 'failed' | undefined => {
 
 .copy-icon {
     color: var(--k-text-light);
+}
+
+.copy-link-btn {
+    flex-shrink: 0;
+    padding: 0 6px;
 }
 
 .link-box:hover .copy-icon {

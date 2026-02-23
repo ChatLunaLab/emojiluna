@@ -57,6 +57,7 @@ export class AutoCollector {
     private emojiHashes = new Set<string>()
     private imageFeatures = new Map<string, ImageFeatures>()
     private frequencyTracker = new Map<string, FrequencyRecord>()
+    private hashesReady: Promise<void>
     private static readonly MAX_HASHES = 10000
     private static readonly FREQUENCY_WINDOW = 10 * 60 * 1000 // 10 minutes in milliseconds
     private static readonly SIMILARITY_FRAME_SAMPLES = 5
@@ -88,7 +89,7 @@ export class AutoCollector {
             enableImageTypeFilter: config.enableImageTypeFilter,
             acceptedImageTypes: config.acceptedImageTypes
         }
-        this.loadExistingHashes()
+        this.hashesReady = this.loadExistingHashes()
         this.registerCommands()
 
         ctx.setTimeout(() => this.cleanupFrequencyTracker(), 30 * 60 * 1000)
@@ -96,27 +97,44 @@ export class AutoCollector {
 
     private async loadExistingHashes() {
         try {
-            const emojis = await this.ctx.emojiluna.getEmojiList({
-                limit: 10000
-            })
-            for (const emoji of emojis) {
-                try {
-                    const buffer = await fs.readFile(emoji.path)
-                    const hash = this.calculateImageHash(buffer)
-                    this.emojiHashes.add(hash)
+            const pageSize = 1000
+            let offset = 0
 
-                    const metadata = await getImageMetadata(buffer)
-                    const features = await this.extractImageFeatures(
-                        buffer,
-                        metadata
-                    )
-                    this.imageFeatures.set(hash, features)
-                } catch (error) {
-                    this.ctx.logger.warn(
-                        `Failed to load hash for emoji ${emoji.id}: ${error.message}`
-                    )
+            while (true) {
+                const page = await this.ctx.emojiluna.getEmojiPage({
+                    limit: pageSize,
+                    offset
+                })
+                const emojis = page?.items || []
+
+                if (emojis.length === 0) break
+
+                for (const emoji of emojis) {
+                    try {
+                        const buffer = await fs.readFile(emoji.path)
+                        const hash = this.calculateImageHash(buffer)
+                        this.emojiHashes.add(hash)
+
+                        const metadata = await getImageMetadata(buffer)
+                        const features = await this.extractImageFeatures(
+                            buffer,
+                            metadata
+                        )
+                        this.imageFeatures.set(hash, features)
+                    } catch (error) {
+                        this.ctx.logger.debug(
+                            `Failed to preload hash for emoji ${emoji.id}: ${error.message}`
+                        )
+                    }
                 }
+
+                offset += emojis.length
+                if (emojis.length < pageSize) break
             }
+
+            this.ctx.logger.debug(
+                `Auto collector preloaded ${this.emojiHashes.size} emoji hashes`
+            )
         } catch (error) {
             this.ctx.logger.warn(
                 `Failed to load existing emoji hashes: ${error.message}`
@@ -208,11 +226,13 @@ export class AutoCollector {
         this.ctx.on('message', async (session: Session) => {
             if (!this.shouldProcessMessage(session)) return
 
+            await this.hashesReady
+
             const images = h.select(session.elements, 'img')
             if (images.length === 0) return
 
             if (!(await this.checkHitLimit(session))) {
-                this.ctx.logger.info(
+                this.ctx.logger.debug(
                     `Hit auto collect limit for group ${session.guildId || session.channelId}`
                 )
                 return
@@ -287,7 +307,7 @@ export class AutoCollector {
             const frequency = this.trackImageFrequency(imageInfo.hash, groupId)
 
             if (frequency < this.options.emojiFrequencyThreshold) {
-                this.ctx.logger.info(
+                this.ctx.logger.debug(
                     `Skip auto-collect: frequency too low (${frequency}/${this.options.emojiFrequencyThreshold})`
                 )
                 return
@@ -295,7 +315,7 @@ export class AutoCollector {
 
             const duplicateReason = await this.getDuplicateReason(imageInfo)
             if (duplicateReason) {
-                this.ctx.logger.info(`Skip auto-collect: ${duplicateReason}`)
+                this.ctx.logger.debug(`Skip auto-collect: ${duplicateReason}`)
                 return
             }
 
@@ -307,12 +327,12 @@ export class AutoCollector {
 
                 if (filterResult) {
                     if (!filterResult.isAcceptable) {
-                        this.ctx.logger.warn(
+                        this.ctx.logger.debug(
                             `Skip auto-collect: rejected by AI filter (type=${filterResult.imageType}, reason=${filterResult.reason})`
                         )
                         return
                     }
-                    this.ctx.logger.warn(
+                    this.ctx.logger.debug(
                         `AI filter accepted image (type=${filterResult.imageType}, confidence=${filterResult.confidence})`
                     )
                 }
@@ -320,7 +340,7 @@ export class AutoCollector {
 
             await this.saveEmoji(imageInfo, session)
         } catch (error) {
-            this.ctx.logger.warn(`Failed to process image: ${error.message}`)
+            this.ctx.logger.debug(`Failed to process image: ${error.message}`)
         }
     }
 
@@ -342,7 +362,7 @@ export class AutoCollector {
                 metadata
             }
         } catch (error) {
-            this.ctx.logger.warn(`Failed to get image info: ${error.message}`)
+            this.ctx.logger.debug(`Failed to get image info: ${error.message}`)
             return null
         }
     }
@@ -352,14 +372,14 @@ export class AutoCollector {
         const sizeMB = sizeKB / 1024
 
         if (sizeKB < this.options.minSize) {
-            this.ctx.logger.info(
+            this.ctx.logger.debug(
                 `Skip auto-collect: image too small (${sizeKB.toFixed(2)}KB < ${this.options.minSize}KB)`
             )
             return false
         }
 
         if (sizeMB > this.options.maxSize) {
-            this.ctx.logger.info(
+            this.ctx.logger.debug(
                 `Skip auto-collect: image too large (${sizeMB.toFixed(2)}MB > ${this.options.maxSize}MB)`
             )
             return false
@@ -579,7 +599,7 @@ export class AutoCollector {
                 )
 
                 if (similarity >= this.options.similarityThreshold) {
-                    this.ctx.logger.info(
+                    this.ctx.logger.debug(
                         `Similar image found: similarity=${similarity.toFixed(3)}, threshold=${this.options.similarityThreshold}`
                     )
                     return true
@@ -588,7 +608,9 @@ export class AutoCollector {
 
             return false
         } catch (error) {
-            this.ctx.logger.warn(`Failed to check similarity: ${error.message}`)
+            this.ctx.logger.debug(
+                `Failed to check similarity: ${error.message}`
+            )
             return false
         }
     }
@@ -596,7 +618,7 @@ export class AutoCollector {
     private async saveEmoji(imageInfo: ImageInfo, session: Session) {
         try {
             if (this.emojiHashes.has(imageInfo.hash)) {
-                this.ctx.logger.info(
+                this.ctx.logger.debug(
                     'Skip auto-collect: duplicate hash already collected'
                 )
                 return
