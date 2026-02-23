@@ -14,10 +14,21 @@
             />
 
             <!-- Status Indicator -->
-            <div v-if="status" class="status-indicator" :data-status="status" aria-hidden>
+            <div
+                v-if="status"
+                class="status-indicator"
+                :data-status="status"
+                aria-hidden
+            >
                 <span class="status-backdrop" aria-hidden></span>
                 <span class="status-dot" aria-hidden></span>
-                <span v-if="status === 'failed'" class="status-symbol" aria-hidden>×</span>
+                <span
+                    v-if="status === 'failed'"
+                    class="status-symbol"
+                    aria-hidden
+                >
+                    ×
+                </span>
             </div>
 
             <!-- Selection Indicator -->
@@ -235,7 +246,7 @@ const handleClick = () => {
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    background: rgba(0,0,0,0.55);
+    background: rgba(0, 0, 0, 0.55);
     top: 0;
     left: 0;
 }
@@ -249,16 +260,16 @@ const handleClick = () => {
     box-sizing: border-box;
 }
 
-.status-indicator[data-status="pending"] .status-dot {
-    background-color: var(--status-pending-color, #FFC107);
+.status-indicator[data-status='pending'] .status-dot {
+    background-color: var(--status-pending-color, #ffc107);
     animation: status-breathing 2s infinite ease-in-out;
 }
-.status-indicator[data-status="succeeded"] .status-dot {
-    background-color: var(--status-success-color, #28A745);
+.status-indicator[data-status='succeeded'] .status-dot {
+    background-color: var(--status-success-color, #28a745);
 }
 
-.status-indicator[data-status="failed"] .status-dot {
-    background-color: var(--status-error-color, #DC3545);
+.status-indicator[data-status='failed'] .status-dot {
+    background-color: var(--status-error-color, #dc3545);
 }
 
 .status-indicator .status-symbol {
@@ -270,9 +281,18 @@ const handleClick = () => {
 }
 
 @keyframes status-breathing {
-    0% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.6; transform: scale(1.1); }
-    100% { opacity: 1; transform: scale(1); }
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.6;
+        transform: scale(1.1);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 @media (max-width: 768px) {

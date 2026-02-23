@@ -5,7 +5,7 @@ import { applyCommands } from './commands'
 import { AutoCollector } from './autoCollector'
 import { applyBackend } from './backend'
 import { modelSchema } from 'koishi-plugin-chatluna/utils/schema'
-import { EmojiItem, Category } from './types'
+import { Category, EmojiItem, EmojiSearchOptions } from './types'
 
 export function apply(ctx: Context, config: Config) {
     ctx.plugin(EmojiLunaService, config)
@@ -59,41 +59,24 @@ declare module 'koishi' {
             emoji_count: number
             created_at: Date
         }
-        emojiluna_ai_tasks: {
-            id: string
-            emoji_id: string
-            image_path: string
-            image_hash: string
-            status: 'pending' | 'processing' | 'succeeded' | 'failed'
-            attempts: number
-            last_error: string
-            next_retry_at: number
-            created_at: number
-            updated_at: number
-        }
-        emojiluna_ai_results: {
-            hash: string
-            result_json: string
-            created_at: number
-        }
     }
 }
 
 declare module '@koishijs/console' {
     interface Events {
-        'emojiluna/getAiTaskStats': () => Promise<{ 
+        'emojiluna/getAiTaskStats': () => Promise<{
             pending: number
             processing: number
             succeeded: number
             failed: number
             paused: boolean
-            runtimeConfig: { concurrency: number; batchDelay: number }
         }>
-        'emojiluna/getEmojiCount': (options: any) => Promise<number>
+        'emojiluna/getEmojiCount': (
+            options?: EmojiSearchOptions
+        ) => Promise<number>
         'emojiluna/getFailedAiEmojiIds': () => Promise<string[]>
         'emojiluna/reanalyzeBatch': (ids: string[]) => Promise<number>
         'emojiluna/setAiPaused': (paused: boolean) => void
-        'emojiluna/setRuntimeConfig': (config: { concurrency?: number; batchDelay?: number }) => void
         'emojiluna/retryFailedTasks': () => Promise<number>
     }
 }

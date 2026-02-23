@@ -1,6 +1,6 @@
 import { createJimp } from '@jimp/core'
 import { defaultFormats, defaultPlugins } from 'jimp'
-import { parseGIF, decompressFrames } from 'gifuct-js'
+import { decompressFrames, parseGIF } from 'gifuct-js'
 
 const Jimp = createJimp({
     formats: [...defaultFormats],
@@ -221,7 +221,7 @@ function decodeGifFrames(
         height: number
     } | null = null
 
-    frames.forEach((frame: any, index: number) => {
+    frames.forEach((frame: (typeof frames)[0], index: number) => {
         if (index > 0) {
             if (previousDisposal === 2 && previousDims) {
                 clearRect(canvas, width, previousDims)
@@ -232,7 +232,7 @@ function decodeGifFrames(
 
         restoreCanvas = frame.disposalType === 3 ? new Uint8Array(canvas) : null
 
-        drawPatch(canvas, width, frame.patch, frame.dims)
+        drawPatch(canvas, width, new Uint8Array(frame.patch), frame.dims)
 
         if (target.has(index)) {
             output.push({

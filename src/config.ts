@@ -178,9 +178,10 @@ ${IMAGE_CONTENT_TYPES.map((item) => `- ${item.type}: ${item.label} - ${item.desc
         backendPath: Schema.string()
             .description('后端服务器路径')
             .default('/emojiluna'),
-        uploadToken: Schema.string().description('上传接口 API Token（可选）').default('')
+        uploadToken: Schema.string()
+            .description('上传接口 API Token（可选）')
+            .default('')
     }).description('API 配置'),
-    
 
     Schema.object({
         batchSize: Schema.number()
@@ -193,24 +194,21 @@ ${IMAGE_CONTENT_TYPES.map((item) => `- ${item.type}: ${item.label} - ${item.desc
             .min(1)
             .max(10)
             .default(3),
-        aiBatchDelay: Schema.number()
+        AIBatchDelay: Schema.number()
             .description('AI 批次间延迟(ms)')
             .min(0)
             .max(5000)
             .default(300),
-        aiMaxAttempts: Schema.number()
+        AIMaxAttempts: Schema.number()
             .description('AI 分析最大重试次数')
             .min(1)
             .max(10)
             .default(3),
-        aiBackoffBase: Schema.number()
+        AIBackoffBase: Schema.number()
             .description('AI 重试退避基数(ms)')
             .min(100)
             .max(10000)
-            .default(1000),
-        persistAiTasks: Schema.boolean()
-            .description('是否持久化 AI 任务到数据库')
-            .default(true)
+            .default(1000)
     }).description('性能与并发配置'),
 
     Schema.object({
@@ -301,10 +299,9 @@ export interface Config {
     // Performance & Concurrency
     batchSize: number
     aiConcurrency: number
-    aiBatchDelay: number
-    aiMaxAttempts: number
-    aiBackoffBase: number
-    persistAiTasks: boolean
+    AIBatchDelay: number
+    AIMaxAttempts: number
+    AIBackoffBase: number
 }
 
 export const name = 'emojiluna'

@@ -10,10 +10,14 @@
         <div class="dialog-content">
             <!-- Folder Path Input -->
             <div class="form-group">
-                <label class="form-label required">{{ t('emojiluna.folderImport.folderPath') }}</label>
+                <label class="form-label required">
+                    {{ t('emojiluna.folderImport.folderPath') }}
+                </label>
                 <el-input
                     v-model="form.folderPath"
-                    :placeholder="t('emojiluna.folderImport.folderPathPlaceholder')"
+                    :placeholder="
+                        t('emojiluna.folderImport.folderPathPlaceholder')
+                    "
                     @blur="handleFolderPathChange"
                     clearable
                 >
@@ -21,7 +25,9 @@
                         <el-icon><Folder /></el-icon>
                     </template>
                 </el-input>
-                <div class="form-hint">{{ t('emojiluna.folderImport.folderPathHint') }}</div>
+                <div class="form-hint">
+                    {{ t('emojiluna.folderImport.folderPathHint') }}
+                </div>
             </div>
 
             <!-- Scan Result Preview -->
@@ -32,15 +38,29 @@
                 </div>
                 <div class="scan-stats">
                     <div class="stat-item">
-                        <span class="stat-value">{{ scanResult.totalFiles }}</span>
-                        <span class="stat-label">{{ t('emojiluna.folderImport.imageFiles') }}</span>
+                        <span class="stat-value">
+                            {{ scanResult.totalFiles }}
+                        </span>
+                        <span class="stat-label">
+                            {{ t('emojiluna.folderImport.imageFiles') }}
+                        </span>
                     </div>
-                    <div class="stat-item" v-if="scanResult.subfolders.length > 0">
-                        <span class="stat-value">{{ scanResult.subfolders.length }}</span>
-                        <span class="stat-label">{{ t('emojiluna.folderImport.subfolders') }}</span>
+                    <div
+                        class="stat-item"
+                        v-if="scanResult.subfolders.length > 0"
+                    >
+                        <span class="stat-value">
+                            {{ scanResult.subfolders.length }}
+                        </span>
+                        <span class="stat-label">
+                            {{ t('emojiluna.folderImport.subfolders') }}
+                        </span>
                     </div>
                 </div>
-                <div class="subfolder-list" v-if="scanResult.subfolders.length > 0">
+                <div
+                    class="subfolder-list"
+                    v-if="scanResult.subfolders.length > 0"
+                >
                     <el-tag
                         v-for="folder in scanResult.subfolders.slice(0, 5)"
                         :key="folder"
@@ -71,7 +91,9 @@
             <div class="options-section">
                 <div class="form-grid">
                     <div class="form-group">
-                        <label class="form-label">{{ t('emojiluna.folderImport.defaultCategory') }}</label>
+                        <label class="form-label">
+                            {{ t('emojiluna.folderImport.defaultCategory') }}
+                        </label>
                         <el-select
                             v-model="form.defaultCategory"
                             :placeholder="t('emojiluna.category')"
@@ -92,53 +114,99 @@
 
                 <!-- Toggle Options -->
                 <div class="option-switches">
-                    <div class="option-item" :class="{ active: form.recursive }">
+                    <div
+                        class="option-item"
+                        :class="{ active: form.recursive }"
+                    >
                         <div class="option-content">
                             <div class="option-icon">
                                 <el-icon><FolderOpened /></el-icon>
                             </div>
                             <div class="option-text">
-                                <div class="option-title">{{ t('emojiluna.folderImport.recursive') }}</div>
-                                <div class="option-desc">{{ t('emojiluna.folderImport.recursiveDesc') }}</div>
+                                <div class="option-title">
+                                    {{ t('emojiluna.folderImport.recursive') }}
+                                </div>
+                                <div class="option-desc">
+                                    {{
+                                        t(
+                                            'emojiluna.folderImport.recursiveDesc'
+                                        )
+                                    }}
+                                </div>
                             </div>
                         </div>
                         <el-switch v-model="form.recursive" />
                     </div>
 
-                    <div class="option-item" :class="{ active: form.useSubfoldersAsCategories }">
+                    <div
+                        class="option-item"
+                        :class="{ active: form.useSubfoldersAsCategories }"
+                    >
                         <div class="option-content">
                             <div class="option-icon">
                                 <el-icon><Collection /></el-icon>
                             </div>
                             <div class="option-text">
-                                <div class="option-title">{{ t('emojiluna.folderImport.useSubfolders') }}</div>
-                                <div class="option-desc">{{ t('emojiluna.folderImport.useSubfoldersDesc') }}</div>
+                                <div class="option-title">
+                                    {{
+                                        t(
+                                            'emojiluna.folderImport.useSubfolders'
+                                        )
+                                    }}
+                                </div>
+                                <div class="option-desc">
+                                    {{
+                                        t(
+                                            'emojiluna.folderImport.useSubfoldersDesc'
+                                        )
+                                    }}
+                                </div>
                             </div>
                         </div>
                         <el-switch v-model="form.useSubfoldersAsCategories" />
                     </div>
 
-                    <div class="option-item" :class="{ active: form.skipExisting }">
+                    <div
+                        class="option-item"
+                        :class="{ active: form.skipExisting }"
+                    >
                         <div class="option-content">
                             <div class="option-icon">
                                 <el-icon><CircleCheck /></el-icon>
                             </div>
                             <div class="option-text">
-                                <div class="option-title">{{ t('emojiluna.folderImport.skipExisting') }}</div>
-                                <div class="option-desc">{{ t('emojiluna.folderImport.skipExistingDesc') }}</div>
+                                <div class="option-title">
+                                    {{
+                                        t('emojiluna.folderImport.skipExisting')
+                                    }}
+                                </div>
+                                <div class="option-desc">
+                                    {{
+                                        t(
+                                            'emojiluna.folderImport.skipExistingDesc'
+                                        )
+                                    }}
+                                </div>
                             </div>
                         </div>
                         <el-switch v-model="form.skipExisting" />
                     </div>
 
-                    <div class="option-item ai-option" :class="{ active: form.aiAnalysis }">
+                    <div
+                        class="option-item ai-option"
+                        :class="{ active: form.aiAnalysis }"
+                    >
                         <div class="option-content">
                             <div class="option-icon ai-icon">
                                 <el-icon><MagicStick /></el-icon>
                             </div>
                             <div class="option-text">
-                                <div class="option-title">{{ t('emojiluna.aiAnalysis') }}</div>
-                                <div class="option-desc">{{ t('emojiluna.aiAnalysisDesc') }}</div>
+                                <div class="option-title">
+                                    {{ t('emojiluna.aiAnalysis') }}
+                                </div>
+                                <div class="option-desc">
+                                    {{ t('emojiluna.aiAnalysisDesc') }}
+                                </div>
                             </div>
                         </div>
                         <el-switch v-model="form.aiAnalysis" />
@@ -157,32 +225,71 @@
             </div>
 
             <!-- Import Result -->
-            <div v-if="importResult" class="import-result" :class="{ 'has-errors': importResult.errors.length > 0 }">
+            <div
+                v-if="importResult"
+                class="import-result"
+                :class="{ 'has-errors': importResult.errors.length > 0 }"
+            >
                 <div class="result-header">
-                    <el-icon v-if="importResult.success"><CircleCheck /></el-icon>
-                    <el-icon v-else class="error-icon"><WarningFilled /></el-icon>
-                    <span>{{ t('emojiluna.folderImport.importComplete') }}</span>
+                    <el-icon v-if="importResult.success">
+                        <CircleCheck />
+                    </el-icon>
+                    <el-icon v-else class="error-icon">
+                        <WarningFilled />
+                    </el-icon>
+                    <span>
+                        {{ t('emojiluna.folderImport.importComplete') }}
+                    </span>
                 </div>
                 <div class="result-stats">
                     <div class="result-stat success">
-                        <span class="stat-value">{{ importResult.imported }}</span>
-                        <span class="stat-label">{{ t('emojiluna.folderImport.imported') }}</span>
+                        <span class="stat-value">
+                            {{ importResult.imported }}
+                        </span>
+                        <span class="stat-label">
+                            {{ t('emojiluna.folderImport.imported') }}
+                        </span>
                     </div>
-                    <div class="result-stat warning" v-if="importResult.skipped > 0">
-                        <span class="stat-value">{{ importResult.skipped }}</span>
-                        <span class="stat-label">{{ t('emojiluna.folderImport.skipped') }}</span>
+                    <div
+                        class="result-stat warning"
+                        v-if="importResult.skipped > 0"
+                    >
+                        <span class="stat-value">
+                            {{ importResult.skipped }}
+                        </span>
+                        <span class="stat-label">
+                            {{ t('emojiluna.folderImport.skipped') }}
+                        </span>
                     </div>
-                    <div class="result-stat error" v-if="importResult.failed > 0">
-                        <span class="stat-value">{{ importResult.failed }}</span>
-                        <span class="stat-label">{{ t('emojiluna.folderImport.failed') }}</span>
+                    <div
+                        class="result-stat error"
+                        v-if="importResult.failed > 0"
+                    >
+                        <span class="stat-value">
+                            {{ importResult.failed }}
+                        </span>
+                        <span class="stat-label">
+                            {{ t('emojiluna.folderImport.failed') }}
+                        </span>
                     </div>
                 </div>
                 <div v-if="importResult.errors.length > 0" class="error-list">
-                    <div v-for="(error, index) in importResult.errors.slice(0, 3)" :key="index" class="error-item">
+                    <div
+                        v-for="(error, index) in importResult.errors.slice(
+                            0,
+                            3
+                        )"
+                        :key="index"
+                        class="error-item"
+                    >
                         {{ error }}
                     </div>
-                    <div v-if="importResult.errors.length > 3" class="error-more">
-                        +{{ importResult.errors.length - 3 }} {{ t('emojiluna.folderImport.moreErrors') }}
+                    <div
+                        v-if="importResult.errors.length > 3"
+                        class="error-more"
+                    >
+                        +{{ importResult.errors.length - 3 }}
+                        {{ t('emojiluna.folderImport.moreErrors') }}
                     </div>
                 </div>
             </div>
@@ -190,7 +297,9 @@
 
         <template #footer>
             <div class="dialog-footer">
-                <el-button @click="handleClose" class="cancel-btn">{{ t('common.cancel') }}</el-button>
+                <el-button @click="handleClose" class="cancel-btn">
+                    {{ t('common.cancel') }}
+                </el-button>
                 <el-button
                     type="primary"
                     @click="handleImport"
@@ -199,7 +308,11 @@
                     class="submit-btn"
                 >
                     <el-icon v-if="!importing"><Download /></el-icon>
-                    {{ importing ? t('emojiluna.folderImport.importing') : t('emojiluna.folderImport.startImport') }}
+                    {{
+                        importing
+                            ? t('emojiluna.folderImport.importing')
+                            : t('emojiluna.folderImport.startImport')
+                    }}
                 </el-button>
             </div>
         </template>
@@ -222,7 +335,12 @@ import {
     Loading,
     WarningFilled
 } from '@element-plus/icons-vue'
-import type { Category, FolderImportOptions, FolderImportResult, FolderScanResult } from 'koishi-plugin-emojiluna'
+import type {
+    Category,
+    FolderImportOptions,
+    FolderImportResult,
+    FolderScanResult
+} from 'koishi-plugin-emojiluna'
 
 interface Props {
     modelValue: boolean
@@ -266,7 +384,7 @@ const canImport = computed(() => {
 
 const loadCategories = async () => {
     try {
-        categories.value = await send('emojiluna/getCategories') || []
+        categories.value = (await send('emojiluna/getCategories')) || []
     } catch (error) {
         console.error('Failed to load categories:', error)
     }
@@ -282,7 +400,10 @@ const handleFolderPathChange = async () => {
     scanResult.value = null
 
     try {
-        const result = await send('emojiluna/scanFolder', form.folderPath.trim())
+        const result = await send(
+            'emojiluna/scanFolder',
+            form.folderPath.trim()
+        )
         scanResult.value = result
     } catch (error) {
         console.error('Scan failed:', error)
@@ -317,7 +438,11 @@ const handleImport = async () => {
         importResult.value = result
 
         if (result.success && result.imported > 0) {
-            ElMessage.success(t('emojiluna.folderImport.importSuccess', { count: result.imported }))
+            ElMessage.success(
+                t('emojiluna.folderImport.importSuccess', {
+                    count: result.imported
+                })
+            )
             emit('success')
         } else if (result.imported === 0 && result.skipped > 0) {
             ElMessage.info(t('emojiluna.folderImport.allSkipped'))

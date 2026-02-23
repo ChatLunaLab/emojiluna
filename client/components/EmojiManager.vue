@@ -1,395 +1,513 @@
 <template>
-  <div class="emoji-manager">
-    <!-- Toolbar -->
-    <div class="toolbar-container">
-      <div class="toolbar-main">
-        <div class="search-section">
-          <el-input
-            v-model="searchKeyword"
-            :placeholder="t('emojiluna.search')"
-            class="search-input"
-            @keyup.enter="handleSearch"
-            clearable
-          >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
+    <div class="emoji-manager">
+        <!-- Toolbar -->
+        <div class="toolbar-container">
+            <div class="toolbar-main">
+                <div class="search-section">
+                    <el-input
+                        v-model="searchKeyword"
+                        :placeholder="t('emojiluna.search')"
+                        class="search-input"
+                        @keyup.enter="handleSearch"
+                        clearable
+                    >
+                        <template #prefix>
+                            <el-icon><Search /></el-icon>
+                        </template>
+                    </el-input>
+                </div>
+
+                <div class="actions-section">
+                    <el-button
+                        :type="isSelectionMode ? 'danger' : 'default'"
+                        circle
+                        @click="toggleSelectionMode"
+                        :title="isSelectionMode ? t('common.cancel') : '选择'"
+                    >
+                        <el-icon v-if="isSelectionMode"><Close /></el-icon>
+                        <el-icon v-else><Check /></el-icon>
+                    </el-button>
+
+                    <el-dropdown trigger="click" @command="handleFilterCommand">
+                        <el-button circle>
+                            <el-icon><Filter /></el-icon>
+                        </el-button>
+                        <template #dropdown>
+                            <el-dropdown-menu>
+                                <el-dropdown-item command="reset">
+                                    重置筛选
+                                </el-dropdown-item>
+                                <el-dropdown-item
+                                    command="filter:all"
+                                    :disabled="filterStatus === 'all'"
+                                >
+                                    显示全部
+                                </el-dropdown-item>
+                                <el-dropdown-item
+                                    command="filter:unanalyzed"
+                                    :disabled="filterStatus === 'unanalyzed'"
+                                >
+                                    仅显示未分析
+                                </el-dropdown-item>
+                                <el-dropdown-item
+                                    command="filter:analyzed"
+                                    :disabled="filterStatus === 'analyzed'"
+                                >
+                                    仅显示已分析
+                                </el-dropdown-item>
+                                <el-dropdown-item divided disabled>
+                                    按分类筛选
+                                </el-dropdown-item>
+                                <el-dropdown-item
+                                    v-for="cat in categories"
+                                    :key="cat.name"
+                                    :command="{
+                                        type: 'category',
+                                        value: cat.name
+                                    }"
+                                >
+                                    {{ cat.name }}
+                                </el-dropdown-item>
+                            </el-dropdown-menu>
+                        </template>
+                    </el-dropdown>
+
+                    <el-button
+                        type="primary"
+                        circle
+                        @click="showAddDialog = true"
+                        v-if="!isSelectionMode"
+                        :title="t('emojiluna.addEmoji')"
+                    >
+                        <el-icon><Plus /></el-icon>
+                    </el-button>
+
+                    <el-button
+                        circle
+                        @click="showFolderImportDialog = true"
+                        v-if="!isSelectionMode"
+                        :title="t('emojiluna.folderImport.title')"
+                    >
+                        <el-icon><FolderAdd /></el-icon>
+                    </el-button>
+
+                    <!-- AI Stats -->
+                    <el-tooltip
+                        :content="
+                            aiStats.paused
+                                ? t('emojiluna.aiPaused')
+                                : t('emojiluna.aiConsole')
+                        "
+                        placement="bottom"
+                    >
+                        <div>
+                            <el-tag
+                                v-if="totalTasks > 0"
+                                :type="statusTagType"
+                                class="ai-status-tag"
+                                effect="light"
+                                round
+                                @click="aiControlVisible = true"
+                            >
+                                <div class="ai-status-tag-content">
+                                    <!-- Icon Status -->
+                                    <el-icon v-if="aiStats.paused">
+                                        <VideoPause />
+                                    </el-icon>
+                                    <el-icon
+                                        v-else-if="aiStats.processing > 0"
+                                        class="is-loading"
+                                    >
+                                        <Loading />
+                                    </el-icon>
+                                    <el-icon v-else><Check /></el-icon>
+
+                                    <!-- Text Status -->
+                                    <span v-if="aiStats.paused">
+                                        {{ t('emojiluna.aiPaused') }}
+                                    </span>
+                                    <span v-else-if="aiStats.processing > 0">
+                                        {{ t('emojiluna.aiRunning') }}
+                                    </span>
+                                    <span v-else>
+                                        {{ t('emojiluna.aiIdle') }}
+                                    </span>
+                                </div>
+
+                                <div class="ai-status-tag-counts">
+                                    <!-- Counts -->
+                                    <span :title="t('emojiluna.aiPending')">
+                                        {{ t('emojiluna.aiPending') }}:{{
+                                            aiStats.pending
+                                        }}
+                                    </span>
+                                    <span :title="t('emojiluna.aiSucceeded')">
+                                        {{ t('emojiluna.aiSucceeded') }}:{{
+                                            aiStats.succeeded
+                                        }}
+                                    </span>
+                                    <span
+                                        v-if="aiStats.failed > 0"
+                                        :title="t('emojiluna.aiFailed')"
+                                        class="failed-count"
+                                    >
+                                        {{ t('emojiluna.aiFailed') }}:{{
+                                            aiStats.failed
+                                        }}
+                                    </span>
+                                </div>
+                            </el-tag>
+                        </div>
+                    </el-tooltip>
+                </div>
+            </div>
+
+            <!-- Active Filters Display -->
+            <div class="active-filters" v-if="selectedCategory || selectedTag">
+                <el-tag
+                    v-if="selectedCategory"
+                    closable
+                    @close="clearCategoryFilter"
+                    type="info"
+                    size="small"
+                >
+                    分类: {{ selectedCategory }}
+                </el-tag>
+                <el-tag
+                    v-if="selectedTag"
+                    closable
+                    @close="clearTagFilter"
+                    type="info"
+                    size="small"
+                >
+                    标签: {{ selectedTag }}
+                </el-tag>
+            </div>
         </div>
 
-        <div class="actions-section">
-          <el-button
-            :type="isSelectionMode ? 'danger' : 'default'"
-            circle
-            @click="toggleSelectionMode"
-            :title="isSelectionMode ? t('common.cancel') : '选择'"
-          >
-            <el-icon v-if="isSelectionMode"><Close /></el-icon>
-            <el-icon v-else><Check /></el-icon>
-          </el-button>
+        <!-- Emoji Grid -->
+        <div
+            class="emoji-grid-container"
+            v-loading="loading"
+            ref="containerRef"
+            @mousedown="handleMouseDown"
+        >
+            <div
+                v-if="isDragSelecting"
+                class="selection-box"
+                :style="{
+                    left: selectionBox.left + 'px',
+                    top: selectionBox.top + 'px',
+                    width: selectionBox.width + 'px',
+                    height: selectionBox.height + 'px'
+                }"
+            ></div>
+            <template v-if="emojis.length > 0">
+                <div class="emoji-grid">
+                    <EmojiCard
+                        v-for="emoji in emojis"
+                        :key="emoji.id"
+                        :ref="(el) => setItemRef(el, emoji.id)"
+                        :emoji="emoji"
+                        :base-url="baseUrl"
+                        :selectable="isSelectionMode"
+                        :selected="isSelected(emoji)"
+                        :status="getStatus(emoji)"
+                        @click="handleEmojiClick"
+                        @select="handleEmojiSelect"
+                        @edit="handleEmojiEdit"
+                        @delete="handleEmojiDelete"
+                        class="emoji-card-item"
+                    />
+                </div>
+            </template>
+            <div v-else class="no-emojis">
+                <el-empty :description="t('emojiluna.noEmojis')" />
+            </div>
+        </div>
 
-          <el-dropdown trigger="click" @command="handleFilterCommand">
-             <el-button circle>
-               <el-icon><Filter /></el-icon>
-             </el-button>
-             <template #dropdown>
-               <el-dropdown-menu>
-                 <el-dropdown-item command="reset">重置筛选</el-dropdown-item>
-                 <el-dropdown-item command="filter:all" :disabled="filterStatus === 'all'">显示全部</el-dropdown-item>
-                 <el-dropdown-item command="filter:unanalyzed" :disabled="filterStatus === 'unanalyzed'">仅显示未分析</el-dropdown-item>
-                 <el-dropdown-item command="filter:analyzed" :disabled="filterStatus === 'analyzed'">仅显示已分析</el-dropdown-item>
-                 <el-dropdown-item divided disabled>按分类筛选</el-dropdown-item>
-                 <el-dropdown-item
+        <!-- Pagination -->
+        <div class="pagination" v-if="total > pageSize">
+            <el-pagination
+                v-model:current-page="currentPage"
+                v-model:page-size="pageSize"
+                :page-sizes="[20, 50, 100]"
+                :total="total"
+                layout="prev, pager, next"
+                @size-change="handleSizeChange"
+                @current-change="handleCurrentChange"
+                background
+            />
+        </div>
+
+        <!-- Floating Action Bar (Selection Mode) -->
+        <Transition name="slide-up">
+            <div
+                class="floating-action-bar"
+                v-if="isSelectionMode && selectedEmojis.length > 0"
+            >
+                <div class="selection-count">
+                    已选择 {{ selectedEmojis.length }} 项
+                </div>
+                <div class="selection-actions">
+                    <el-button
+                        type="warning"
+                        text
+                        bg
+                        @click="handleBatchReanalyze"
+                    >
+                        <el-icon><MagicStick /></el-icon>
+                        {{ t('emojiluna.batchReanalyze') }}
+                    </el-button>
+                    <el-button type="primary" text bg @click="openMoveDialog">
+                        <el-icon><FolderOpened /></el-icon>
+                        {{ t('emojiluna.moveTo') }}
+                    </el-button>
+                    <el-button type="danger" text bg @click="handleBatchDelete">
+                        <el-icon><Delete /></el-icon>
+                        {{ t('common.delete') }}
+                    </el-button>
+                </div>
+            </div>
+        </Transition>
+
+        <!-- Dialogs -->
+        <AddEmojiDialog v-model="showAddDialog" @success="handleAddSuccess" />
+
+        <EmojiDialog
+            v-model="showEditDialog"
+            :emoji="selectedEmoji"
+            :base-url="baseUrl"
+            @success="handleEditSuccess"
+        />
+
+        <FolderImportDialog
+            v-model="showFolderImportDialog"
+            @success="handleFolderImportSuccess"
+        />
+
+        <!-- Move to Category Dialog -->
+        <el-dialog
+            v-model="showMoveDialog"
+            :title="t('emojiluna.moveCategory')"
+            width="400px"
+        >
+            <el-select
+                v-model="targetCategory"
+                :placeholder="t('emojiluna.selectTargetCategory')"
+                style="width: 100%"
+            >
+                <el-option
                     v-for="cat in categories"
                     :key="cat.name"
-                    :command="{ type: 'category', value: cat.name }"
-                 >
-                   {{ cat.name }}
-                 </el-dropdown-item>
-               </el-dropdown-menu>
-             </template>
-          </el-dropdown>
+                    :label="cat.name"
+                    :value="cat.name"
+                />
+            </el-select>
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="showMoveDialog = false">
+                        {{ t('common.cancel') }}
+                    </el-button>
+                    <el-button
+                        type="primary"
+                        @click="confirmMove"
+                        :loading="moving"
+                    >
+                        {{ t('common.confirm') }}
+                    </el-button>
+                </span>
+            </template>
+        </el-dialog>
 
-          <el-button
-            type="primary"
-            circle
-            @click="showAddDialog = true"
-            v-if="!isSelectionMode"
-            :title="t('emojiluna.addEmoji')"
-          >
-            <el-icon><Plus /></el-icon>
-          </el-button>
+        <!-- Preview Dialog -->
+        <el-dialog
+            v-model="showPreviewDialog"
+            :title="previewEmoji?.name || t('emojiluna.previewTitle')"
+            width="600px"
+            @close="handlePreviewClose"
+            class="preview-dialog"
+            align-center
+        >
+            <div class="preview-content">
+                <div class="preview-layout">
+                    <div class="preview-image-wrapper">
+                        <div class="image-box">
+                            <img
+                                :src="previewEmojiUrl"
+                                :alt="previewEmoji?.name"
+                                class="preview-image"
+                                @error="handlePreviewImageError"
+                            />
+                        </div>
+                        <div class="image-meta">
+                            <span class="meta-badge" v-if="previewEmoji?.size">
+                                {{ formatSize(previewEmoji.size) }}
+                            </span>
+                            <span class="meta-badge">
+                                {{ previewEmoji?.id.slice(0, 8) }}...
+                            </span>
+                        </div>
+                    </div>
 
-          <el-button
-            circle
-            @click="showFolderImportDialog = true"
-            v-if="!isSelectionMode"
-            :title="t('emojiluna.folderImport.title')"
-          >
-            <el-icon><FolderAdd /></el-icon>
-          </el-button>
+                    <div class="preview-details">
+                        <div class="detail-group">
+                            <label class="detail-label">
+                                {{ t('emojiluna.emojiName') }}
+                            </label>
+                            <div class="detail-value text-strong">
+                                {{ previewEmoji?.name }}
+                            </div>
+                        </div>
 
+                        <div class="detail-group">
+                            <label class="detail-label">
+                                {{ t('emojiluna.category') }}
+                            </label>
+                            <div class="detail-value">
+                                <el-tag effect="light" round>
+                                    {{ previewEmoji?.category }}
+                                </el-tag>
+                            </div>
+                        </div>
 
+                        <div
+                            class="detail-group"
+                            v-if="previewEmoji?.tags?.length"
+                        >
+                            <label class="detail-label">
+                                {{ t('emojiluna.tags.default') }}
+                            </label>
+                            <div class="detail-value tags-wrapper">
+                                <el-tag
+                                    v-for="tag in previewEmoji.tags"
+                                    :key="tag"
+                                    size="small"
+                                    type="info"
+                                    effect="plain"
+                                    class="tag-item"
+                                    round
+                                >
+                                    {{ tag }}
+                                </el-tag>
+                            </div>
+                        </div>
 
-          <!-- AI Stats -->
-          <el-tooltip :content="aiStats.paused ? t('emojiluna.aiPaused') : t('emojiluna.aiConsole')" placement="bottom">
-            <div>
-              <el-tag 
-                v-if="totalTasks > 0"
-                :type="statusTagType"
-                class="ai-status-tag"
-                effect="light"
-                round
-                @click="aiControlVisible = true"
-              >
-                  <div class="ai-status-tag-content">
-                      <!-- Icon Status -->
-                      <el-icon v-if="aiStats.paused"><VideoPause /></el-icon>
-                      <el-icon v-else-if="aiStats.processing > 0" class="is-loading"><Loading /></el-icon>
-                      <el-icon v-else><Check /></el-icon>
-
-                      <!-- Text Status -->
-                      <span v-if="aiStats.paused">{{ t('emojiluna.aiPaused') }}</span>
-                      <span v-else-if="aiStats.processing > 0">{{ t('emojiluna.aiRunning') }}</span>
-                      <span v-else>{{ t('emojiluna.aiIdle') }}</span>
-                  </div>
-
-                  <div class="ai-status-tag-counts">
-                      <!-- Counts -->
-                      <span :title="t('emojiluna.aiPending')">{{ t('emojiluna.aiPending') }}:{{ aiStats.pending }}</span>
-                      <span :title="t('emojiluna.aiSucceeded')">{{ t('emojiluna.aiSucceeded') }}:{{ aiStats.succeeded }}</span>
-                      <span v-if="aiStats.failed > 0" :title="t('emojiluna.aiFailed')" class="failed-count">{{ t('emojiluna.aiFailed') }}:{{ aiStats.failed }}</span>
-                  </div>
-              </el-tag>
-            </div>
-          </el-tooltip>
-        </div>
-      </div>
-
-      <!-- Active Filters Display -->
-      <div class="active-filters" v-if="selectedCategory || selectedTag">
-         <el-tag
-            v-if="selectedCategory"
-            closable
-            @close="clearCategoryFilter"
-            type="info"
-            size="small"
-         >
-           分类: {{ selectedCategory }}
-         </el-tag>
-         <el-tag
-            v-if="selectedTag"
-            closable
-            @close="clearTagFilter"
-            type="info"
-            size="small"
-         >
-           标签: {{ selectedTag }}
-         </el-tag>
-      </div>
-    </div>
-
-    <!-- Emoji Grid -->
-    <div
-        class="emoji-grid-container"
-        v-loading="loading"
-        ref="containerRef"
-        @mousedown="handleMouseDown"
-    >
-      <div
-          v-if="isDragSelecting"
-          class="selection-box"
-          :style="{
-              left: selectionBox.left + 'px',
-              top: selectionBox.top + 'px',
-              width: selectionBox.width + 'px',
-              height: selectionBox.height + 'px'
-          }"
-      ></div>
-      <template v-if="emojis.length > 0">
-        <div class="emoji-grid">
-            <EmojiCard
-              v-for="emoji in emojis"
-              :key="emoji.id"
-              :ref="(el) => setItemRef(el, emoji.id)"
-              :emoji="emoji"
-              :base-url="baseUrl"
-              :selectable="isSelectionMode"
-              :selected="isSelected(emoji)"
-              :status="getStatus(emoji)"
-              @click="handleEmojiClick"
-              @select="handleEmojiSelect"
-              @edit="handleEmojiEdit"
-              @delete="handleEmojiDelete"
-              class="emoji-card-item"
-            />
-        </div>
-      </template>
-      <div v-else class="no-emojis">
-        <el-empty :description="t('emojiluna.noEmojis')" />
-      </div>
-    </div>
-
-    <!-- Pagination -->
-    <div class="pagination" v-if="total > pageSize">
-      <el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :page-sizes="[20, 50, 100]"
-        :total="total"
-        layout="prev, pager, next"
-        @size-change="handleSizeChange"
-        @current-change="handleCurrentChange"
-        background
-      />
-    </div>
-
-    <!-- Floating Action Bar (Selection Mode) -->
-    <Transition name="slide-up">
-      <div class="floating-action-bar" v-if="isSelectionMode && selectedEmojis.length > 0">
-        <div class="selection-count">
-            已选择 {{ selectedEmojis.length }} 项
-        </div>
-        <div class="selection-actions">
-            <el-button type="warning" text bg @click="handleBatchReanalyze">
-                <el-icon><MagicStick /></el-icon>
-                {{ t('emojiluna.batchReanalyze') }}
-            </el-button>
-             <el-button type="primary" text bg @click="openMoveDialog">
-                <el-icon><FolderOpened /></el-icon>
-                {{ t('emojiluna.moveTo') }}
-            </el-button>
-            <el-button type="danger" text bg @click="handleBatchDelete">
-                <el-icon><Delete /></el-icon>
-                {{ t('common.delete') }}
-            </el-button>
-        </div>
-      </div>
-    </Transition>
-
-    <!-- Dialogs -->
-    <AddEmojiDialog
-      v-model="showAddDialog"
-      @success="handleAddSuccess"
-    />
-
-    <EmojiDialog
-      v-model="showEditDialog"
-      :emoji="selectedEmoji"
-      :base-url="baseUrl"
-      @success="handleEditSuccess"
-    />
-
-    <FolderImportDialog
-      v-model="showFolderImportDialog"
-      @success="handleFolderImportSuccess"
-    />
-
-    <!-- Move to Category Dialog -->
-    <el-dialog
-        v-model="showMoveDialog"
-        :title="t('emojiluna.moveCategory')"
-        width="400px"
-    >
-        <el-select v-model="targetCategory" :placeholder="t('emojiluna.selectTargetCategory')" style="width: 100%">
-            <el-option
-                v-for="cat in categories"
-                :key="cat.name"
-                :label="cat.name"
-                :value="cat.name"
-            />
-        </el-select>
-        <template #footer>
-            <span class="dialog-footer">
-                <el-button @click="showMoveDialog = false">{{ t('common.cancel') }}</el-button>
-                <el-button type="primary" @click="confirmMove" :loading="moving">
-                    {{ t('common.confirm') }}
-                </el-button>
-            </span>
-        </template>
-    </el-dialog>
-
-    <!-- Preview Dialog -->
-    <el-dialog
-      v-model="showPreviewDialog"
-      :title="previewEmoji?.name || t('emojiluna.previewTitle')"
-      width="600px"
-      @close="handlePreviewClose"
-      class="preview-dialog"
-      align-center
-    >
-      <div class="preview-content">
-        <div class="preview-layout">
-          <div class="preview-image-wrapper">
-            <div class="image-box">
-               <img
-                :src="previewEmojiUrl"
-                :alt="previewEmoji?.name"
-                class="preview-image"
-                @error="handlePreviewImageError"
-              />
-            </div>
-            <div class="image-meta">
-              <span class="meta-badge" v-if="previewEmoji?.size">{{ formatSize(previewEmoji.size) }}</span>
-              <span class="meta-badge">{{ previewEmoji?.id.slice(0, 8) }}...</span>
-            </div>
-          </div>
-
-          <div class="preview-details">
-            <div class="detail-group">
-                <label class="detail-label">{{ t('emojiluna.emojiName') }}</label>
-                <div class="detail-value text-strong">{{ previewEmoji?.name }}</div>
-            </div>
-
-            <div class="detail-group">
-                <label class="detail-label">{{ t('emojiluna.category') }}</label>
-                <div class="detail-value">
-                     <el-tag effect="light" round>{{ previewEmoji?.category }}</el-tag>
+                        <div class="detail-group">
+                            <label class="detail-label">
+                                {{ t('emojiluna.link') }}
+                            </label>
+                            <div class="link-box" @click="copyPreviewLink">
+                                <span class="link-text">
+                                    {{ previewEmojiLink }}
+                                </span>
+                                <el-icon class="copy-icon">
+                                    <DocumentCopy />
+                                </el-icon>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="detail-group" v-if="previewEmoji?.tags?.length">
-                <label class="detail-label">{{ t('emojiluna.tags.default') }}</label>
-                <div class="detail-value tags-wrapper">
-                  <el-tag
-                    v-for="tag in previewEmoji.tags"
-                    :key="tag"
-                    size="small"
-                    type="info"
-                    effect="plain"
-                    class="tag-item"
-                    round
-                  >
-                    {{ tag }}
-                  </el-tag>
+            <template #footer>
+                <div class="dialog-footer">
+                    <div class="footer-left">
+                        <el-button
+                            type="warning"
+                            text
+                            bg
+                            @click="handleAIAnalyze"
+                            :loading="aiCategorizingId === previewEmoji?.id"
+                            :disabled="aiCategorizingId !== ''"
+                            class="ai-btn"
+                        >
+                            <el-icon><MagicStick /></el-icon>
+                            {{ t('emojiluna.reanalyze') }}
+                        </el-button>
+                    </div>
+                    <div class="footer-right">
+                        <el-button @click="handlePreviewEdit" round>
+                            <el-icon><Edit /></el-icon>
+                            {{ t('common.edit') }}
+                        </el-button>
+                        <el-button
+                            type="primary"
+                            @click="handlePreviewClose"
+                            round
+                        >
+                            {{ t('common.cancel') }}
+                        </el-button>
+                    </div>
                 </div>
-            </div>
+            </template>
+        </el-dialog>
 
-            <div class="detail-group">
-                <label class="detail-label">{{ t('emojiluna.link') }}</label>
-                <div class="link-box" @click="copyPreviewLink">
-                    <span class="link-text">{{ previewEmojiLink }}</span>
-                    <el-icon class="copy-icon"><DocumentCopy /></el-icon>
-                </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <template #footer>
-        <div class="dialog-footer">
-          <div class="footer-left">
-              <el-button
-                type="warning"
-                text
-                bg
-                @click="handleAIAnalyze"
-                :loading="aiCategorizingId === previewEmoji?.id"
-                :disabled="aiCategorizingId !== ''"
-                class="ai-btn"
-              >
-                <el-icon><MagicStick /></el-icon>
-                {{ t('emojiluna.reanalyze') }}
-              </el-button>
-          </div>
-          <div class="footer-right">
-              <el-button @click="handlePreviewEdit" round>
-                <el-icon><Edit /></el-icon>
-                {{ t('common.edit') }}
-              </el-button>
-              <el-button type="primary" @click="handlePreviewClose" round>{{ t('common.cancel') }}</el-button>
-          </div>
-        </div>
-      </template>
-    </el-dialog>
-
-
-
-    <!-- AI Control Panel -->
-    <el-dialog v-model="aiControlVisible" :title="t('emojiluna.aiConsole')" width="500px">
-        <el-form label-width="120px">
-            <el-form-item :label="t('emojiluna.aiTotalSwitch')">
-              <el-switch 
-                v-model="aiStats.paused" 
-                :active-text="t('emojiluna.aiPaused')" 
-                :inactive-text="t('emojiluna.aiRunning')"
-                style="--el-switch-on-color: #ff4949; --el-switch-off-color: #13ce66"
-                @change="onAiPausedChange"
-              />
-            </el-form-item>
-            <el-divider>{{ t('emojiluna.aiLimit') }}</el-divider>
-            <el-form-item :label="t('emojiluna.aiConcurrency')">
-                <el-slider v-model="aiConfigForm.concurrency" :min="1" :max="10" show-input />
-            </el-form-item>
-            <el-form-item :label="t('emojiluna.aiBatchDelay')">
-                <el-slider v-model="aiConfigForm.batchDelay" :min="0" :max="5000" :step="100" show-input />
-            </el-form-item>
-            <el-form-item>
-                <el-button type="primary" @click="applyAiConfig">{{ t('emojiluna.aiApplyConfig') }}</el-button>
-            </el-form-item>
-            <el-divider>{{ t('emojiluna.aiErrorHandling') }}</el-divider>
-            <el-form-item :label="t('emojiluna.aiFailedTasks')">
-                <el-tag type="danger">{{ aiStats.failed }}</el-tag>
-                <el-button type="danger" link @click="retryFailedTasks" :disabled="aiStats.failed === 0">
-                    {{ t('emojiluna.aiRetryFailed') }}
-                </el-button>
-            </el-form-item>
-        </el-form>
-    </el-dialog>
-  </div>
+        <!-- AI Control Panel -->
+        <el-dialog
+            v-model="aiControlVisible"
+            :title="t('emojiluna.aiConsole')"
+            width="500px"
+        >
+            <el-form label-width="120px">
+                <el-form-item :label="t('emojiluna.aiTotalSwitch')">
+                    <el-switch
+                        v-model="aiStats.paused"
+                        :active-text="t('emojiluna.aiPaused')"
+                        :inactive-text="t('emojiluna.aiRunning')"
+                        style="
+                            --el-switch-on-color: #ff4949;
+                            --el-switch-off-color: #13ce66;
+                        "
+                        @change="onAiPausedChange"
+                    />
+                </el-form-item>
+                <el-divider>{{ t('emojiluna.aiErrorHandling') }}</el-divider>
+                <el-form-item :label="t('emojiluna.aiFailedTasks')">
+                    <el-tag type="danger">{{ aiStats.failed }}</el-tag>
+                    <el-button
+                        type="danger"
+                        link
+                        @click="retryFailedTasks"
+                        :disabled="aiStats.failed === 0"
+                    >
+                        {{ t('emojiluna.aiRetryFailed') }}
+                    </el-button>
+                </el-form-item>
+            </el-form>
+        </el-dialog>
+    </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick, onUnmounted, reactive } from 'vue'
+import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { send } from '@koishijs/client'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, RefreshRight, DocumentCopy, Edit, MagicStick, Filter, Delete, FolderOpened, Check, Close, FolderAdd, Loading, Setting, VideoPause } from '@element-plus/icons-vue'
+import {
+    Search,
+    Plus,
+    DocumentCopy,
+    Edit,
+    MagicStick,
+    Filter,
+    Delete,
+    FolderOpened,
+    Check,
+    Close,
+    FolderAdd,
+    Loading,
+    VideoPause
+} from '@element-plus/icons-vue'
 import EmojiCard from './EmojiCard.vue'
 import EmojiDialog from './EmojiDialog.vue'
 import AddEmojiDialog from './AddEmojiDialog.vue'
 import FolderImportDialog from './FolderImportDialog.vue'
-import type { EmojiItem, Category, EmojiSearchOptions } from 'koishi-plugin-emojiluna'
+import type {
+    EmojiItem,
+    Category,
+    EmojiSearchOptions
+} from 'koishi-plugin-emojiluna'
 import { useDragSelect } from '../composables/useDragSelect'
 
 const { t } = useI18n()
@@ -422,7 +540,13 @@ const aiCategorizingId = ref<string>('')
 const failedEmojiIds = ref<Set<string>>(new Set())
 
 // Computed
-const totalTasks = computed(() => aiStats.value.pending + aiStats.value.processing + aiStats.value.succeeded + aiStats.value.failed)
+const totalTasks = computed(
+    () =>
+        aiStats.value.pending +
+        aiStats.value.processing +
+        aiStats.value.succeeded +
+        aiStats.value.failed
+)
 const statusTagType = computed(() => {
     if (aiStats.value.failed > 0) return 'danger'
     if (aiStats.value.paused) return 'info'
@@ -443,14 +567,9 @@ const aiStats = ref({
     processing: 0,
     succeeded: 0,
     failed: 0,
-    paused: false,
-    runtimeConfig: { concurrency: 0, batchDelay: -1 }
+    paused: false
 })
 const aiControlVisible = ref(false)
-const aiConfigForm = reactive({
-    concurrency: 3,
-    batchDelay: 300
-})
 
 let aiStatsTimer: any = null
 
@@ -473,18 +592,22 @@ const { isDragSelecting, selectionBox, handleMouseDown } = useDragSelect(
     (item) => itemRefs.get(item.id),
     'id',
     selectedEmojis,
-    () => { isSelectionMode.value = true },
-    () => { isSelectionMode.value = false }
+    () => {
+        isSelectionMode.value = true
+    },
+    () => {
+        isSelectionMode.value = false
+    }
 )
 
 const previewEmojiUrl = computed(() => {
-  if (!previewEmoji.value) return ''
-  return `${baseUrl.value}/get/${previewEmoji.value.id}`
+    if (!previewEmoji.value) return ''
+    return `${baseUrl.value}/get/${previewEmoji.value.id}`
 })
 
 const previewEmojiLink = computed(() => {
-  if (!previewEmoji.value) return ''
-  return `${baseUrl.value}/get/${previewEmoji.value.id}`
+    if (!previewEmoji.value) return ''
+    return `${baseUrl.value}/get/${previewEmoji.value.id}`
 })
 
 const formatSize = (bytes: number) => {
@@ -497,66 +620,70 @@ const formatSize = (bytes: number) => {
 
 // Data Loading
 const loadEmojis = async () => {
-  loading.value = true
-  try {
-    const options: EmojiSearchOptions = {
-      limit: pageSize.value,
-      offset: (currentPage.value - 1) * pageSize.value
-    }
+    loading.value = true
+    try {
+        const options: EmojiSearchOptions = {
+            limit: pageSize.value,
+            offset: (currentPage.value - 1) * pageSize.value
+        }
 
-    if (selectedCategory.value) {
-      options.category = selectedCategory.value
-    }
+        if (selectedCategory.value) {
+            options.category = selectedCategory.value
+        }
 
-    if (selectedTag.value) {
-      options.tags = [selectedTag.value]
-    }
+        if (selectedTag.value) {
+            options.tags = [selectedTag.value]
+        }
 
-    let result
-    if (searchKeyword.value.trim()) {
-      result = await send('emojiluna/searchEmoji', searchKeyword.value.trim())
-      // Client-side filtering for category/tags if search is used
-       if (selectedCategory.value) {
-            result = result.filter((e: EmojiItem) => e.category === selectedCategory.value)
-       }
-       // Client-side pagination for search results
-       total.value = result.length
-       const start = (currentPage.value - 1) * pageSize.value
-       emojis.value = result.slice(start, start + pageSize.value)
-    } else {
-      // Standard paginated fetch
-      emojis.value = await send('emojiluna/getEmojiList', options)
-      
-      // Fetch total count separately for pagination
-      total.value = await send('emojiluna/getEmojiCount', {
-        category: selectedCategory.value || undefined,
-        tags: selectedTag.value ? [selectedTag.value] : undefined
-      })
-    }
+        let result
+        if (searchKeyword.value.trim()) {
+            result = await send(
+                'emojiluna/searchEmoji',
+                searchKeyword.value.trim()
+            )
+            // Client-side filtering for category/tags if search is used
+            if (selectedCategory.value) {
+                result = result.filter(
+                    (e: EmojiItem) => e.category === selectedCategory.value
+                )
+            }
+            // Client-side pagination for search results
+            total.value = result.length
+            const start = (currentPage.value - 1) * pageSize.value
+            emojis.value = result.slice(start, start + pageSize.value)
+        } else {
+            // Standard paginated fetch
+            emojis.value = await send('emojiluna/getEmojiList', options)
 
-  } catch (error) {
-    console.error('Failed to load emojis:', error)
-    ElMessage.error('加载表情包失败')
-  } finally {
-    loading.value = false
-  }
+            // Fetch total count separately for pagination
+            total.value = await send('emojiluna/getEmojiCount', {
+                category: selectedCategory.value || undefined,
+                tags: selectedTag.value ? [selectedTag.value] : undefined
+            })
+        }
+    } catch (error) {
+        console.error('Failed to load emojis:', error)
+        ElMessage.error('加载表情包失败')
+    } finally {
+        loading.value = false
+    }
 }
 
 const loadCategories = async () => {
-  try {
-    categories.value = await send('emojiluna/getCategories') || []
-    baseUrl.value = await send('emojiluna/getBaseUrl') || '/emojiluna'
-  } catch (error) {
-    console.error('Failed to load categories:', error)
-  }
+    try {
+        categories.value = (await send('emojiluna/getCategories')) || []
+        baseUrl.value = (await send('emojiluna/getBaseUrl')) || '/emojiluna'
+    } catch (error) {
+        console.error('Failed to load categories:', error)
+    }
 }
 
 const loadTags = async () => {
-  try {
-    allTags.value = await send('emojiluna/getAllTags') || []
-  } catch (error) {
-    console.error('Failed to load tags:', error)
-  }
+    try {
+        allTags.value = (await send('emojiluna/getAllTags')) || []
+    } catch (error) {
+        console.error('Failed to load tags:', error)
+    }
 }
 
 const updateAiStats = async () => {
@@ -564,34 +691,17 @@ const updateAiStats = async () => {
         const stats = await send('emojiluna/getAiTaskStats')
         if (stats) {
             aiStats.value = stats
-            // Sync form only if dialog closed or first load
-            if (!aiControlVisible.value && stats.runtimeConfig) {
-                if (stats.runtimeConfig.concurrency > 0) aiConfigForm.concurrency = stats.runtimeConfig.concurrency
-                if (stats.runtimeConfig.batchDelay >= 0) aiConfigForm.batchDelay = stats.runtimeConfig.batchDelay
-            }
         }
-          // refresh failed emoji ids as well
-          try {
+        // refresh failed emoji ids as well
+        try {
             const failedIds = await send('emojiluna/getFailedAiEmojiIds')
-            if (Array.isArray(failedIds)) failedEmojiIds.value = new Set(failedIds)
-          } catch (e) {
+            if (Array.isArray(failedIds))
+                failedEmojiIds.value = new Set(failedIds)
+        } catch (e) {
             // ignore
-          }
+        }
     } catch (e) {
         // ignore
-    }
-}
-
-const applyAiConfig = async () => {
-    try {
-        await send('emojiluna/setRuntimeConfig', {
-            concurrency: aiConfigForm.concurrency,
-            batchDelay: aiConfigForm.batchDelay
-        })
-        ElMessage.success('配置已应用')
-        updateAiStats()
-    } catch (e) {
-        ElMessage.error(`应用失败: ${e.message}`)
     }
 }
 
@@ -606,17 +716,17 @@ const retryFailedTasks = async () => {
 }
 
 const onAiPausedChange = async (val: boolean) => {
-  const prev = aiStats.value.paused
-  // optimistic update already applied by v-model, keep local copy
-  try {
-    await send('emojiluna/setAiPaused', !!val)
-    ElMessage.success(val ? 'AI 已暂停' : 'AI 已恢复')
-    updateAiStats()
-  } catch (e) {
-    // rollback
-    aiStats.value.paused = prev
-    ElMessage.error(`设置失败: ${e?.message || e}`)
-  }
+    const prev = aiStats.value.paused
+    // optimistic update already applied by v-model, keep local copy
+    try {
+        await send('emojiluna/setAiPaused', !!val)
+        ElMessage.success(val ? 'AI 已暂停' : 'AI 已恢复')
+        updateAiStats()
+    } catch (e) {
+        // rollback
+        aiStats.value.paused = prev
+        ElMessage.error(`设置失败: ${e?.message || e}`)
+    }
 }
 
 onMounted(() => {
@@ -630,10 +740,11 @@ onUnmounted(() => {
 })
 
 const handleBatchReanalyze = async () => {
-    const ids = isSelectionMode.value && selectedEmojis.value.length > 0 
-        ? selectedEmojis.value.map(e => e.id) 
-        : []
-    
+    const ids =
+        isSelectionMode.value && selectedEmojis.value.length > 0
+            ? selectedEmojis.value.map((e) => e.id)
+            : []
+
     if (ids.length === 0) return
 
     try {
@@ -649,17 +760,13 @@ const handleBatchReanalyze = async () => {
 }
 
 const refreshData = async () => {
-  await Promise.all([
-    loadEmojis(),
-    loadCategories(),
-    loadTags()
-  ])
+    await Promise.all([loadEmojis(), loadCategories(), loadTags()])
 }
 
 // Event Handlers
 const handleSearch = () => {
-  currentPage.value = 1
-  loadEmojis()
+    currentPage.value = 1
+    loadEmojis()
 }
 
 const handleFilterCommand = (command: any) => {
@@ -686,56 +793,56 @@ const clearTagFilter = () => {
 }
 
 const resetFilters = () => {
-  selectedCategory.value = ''
-  selectedTag.value = ''
-  searchKeyword.value = ''
-  filterStatus.value = 'all'
-  currentPage.value = 1
-  loadEmojis()
+    selectedCategory.value = ''
+    selectedTag.value = ''
+    searchKeyword.value = ''
+    filterStatus.value = 'all'
+    currentPage.value = 1
+    loadEmojis()
 }
 
 const handleSizeChange = (newSize: number) => {
-  pageSize.value = newSize
-  currentPage.value = 1
-  loadEmojis()
+    pageSize.value = newSize
+    currentPage.value = 1
+    loadEmojis()
 }
 
 const handleCurrentChange = (newPage: number) => {
-  currentPage.value = newPage
-  loadEmojis()
+    currentPage.value = newPage
+    loadEmojis()
 }
 
 const handleEmojiClick = (emoji: EmojiItem) => {
-  previewEmoji.value = emoji
-  showPreviewDialog.value = true
+    previewEmoji.value = emoji
+    showPreviewDialog.value = true
 }
 
 const handleEmojiEdit = (emoji: EmojiItem) => {
-  selectedEmoji.value = emoji
-  showEditDialog.value = true
+    selectedEmoji.value = emoji
+    showEditDialog.value = true
 }
 
 const handleEmojiDelete = async (emoji: EmojiItem) => {
-  try {
-    await ElMessageBox.confirm(
-      `确定要删除表情包 "${emoji.name}" 吗？`,
-      '警告',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }
-    )
+    try {
+        await ElMessageBox.confirm(
+            `确定要删除表情包 "${emoji.name}" 吗？`,
+            '警告',
+            {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                type: 'warning'
+            }
+        )
 
-    await send('emojiluna/deleteEmoji', emoji.id)
-    ElMessage.success('删除成功')
-    refreshData()
-  } catch (error) {
-    if (error !== 'cancel') {
-      console.error('Failed to delete emoji:', error)
-      ElMessage.error('删除失败')
+        await send('emojiluna/deleteEmoji', emoji.id)
+        ElMessage.success('删除成功')
+        refreshData()
+    } catch (error) {
+        if (error !== 'cancel') {
+            console.error('Failed to delete emoji:', error)
+            ElMessage.error('删除失败')
+        }
     }
-  }
 }
 
 // Selection Mode Logic
@@ -745,11 +852,11 @@ const toggleSelectionMode = () => {
 }
 
 const isSelected = (emoji: EmojiItem) => {
-    return selectedEmojis.value.some(e => e.id === emoji.id)
+    return selectedEmojis.value.some((e) => e.id === emoji.id)
 }
 
 const handleEmojiSelect = (emoji: EmojiItem) => {
-    const index = selectedEmojis.value.findIndex(e => e.id === emoji.id)
+    const index = selectedEmojis.value.findIndex((e) => e.id === emoji.id)
     if (index > -1) {
         selectedEmojis.value.splice(index, 1)
     } else {
@@ -761,19 +868,21 @@ const handleBatchDelete = async () => {
     if (selectedEmojis.value.length === 0) return
 
     try {
-         await ElMessageBox.confirm(
+        await ElMessageBox.confirm(
             `确定要删除选中的 ${selectedEmojis.value.length} 个表情包吗？`,
             '警告',
             {
                 confirmButtonText: '确定',
                 cancelButtonText: '取消',
-                type: 'warning',
+                type: 'warning'
             }
         )
 
         // Sequential delete or Parallel?
         // Backend API seems single delete. Use Promise.all
-        const deletePromises = selectedEmojis.value.map(emoji => send('emojiluna/deleteEmoji', emoji.id))
+        const deletePromises = selectedEmojis.value.map((emoji) =>
+            send('emojiluna/deleteEmoji', emoji.id)
+        )
         await Promise.all(deletePromises)
 
         ElMessage.success(`成功删除 ${selectedEmojis.value.length} 个表情包`)
@@ -782,8 +891,8 @@ const handleBatchDelete = async () => {
         refreshData()
     } catch (error) {
         if (error !== 'cancel') {
-             console.error('Batch delete failed', error)
-             ElMessage.error('批量删除失败')
+            console.error('Batch delete failed', error)
+            ElMessage.error('批量删除失败')
         }
     }
 }
@@ -801,8 +910,12 @@ const confirmMove = async () => {
 
     moving.value = true
     try {
-        const movePromises = selectedEmojis.value.map(emoji => {
-            return send('emojiluna/updateEmojiCategory', emoji.id, targetCategory.value)
+        const movePromises = selectedEmojis.value.map((emoji) => {
+            return send(
+                'emojiluna/updateEmojiCategory',
+                emoji.id,
+                targetCategory.value
+            )
         })
 
         await Promise.all(movePromises)
@@ -820,108 +933,118 @@ const confirmMove = async () => {
 }
 
 const handleAddSuccess = () => {
-  refreshData()
+    refreshData()
 }
 
 const handleEditSuccess = () => {
-  refreshData()
+    refreshData()
 }
 
 const handleFolderImportSuccess = () => {
-  refreshData()
+    refreshData()
 }
 
 const handlePreviewClose = () => {
-  showPreviewDialog.value = false
-  previewEmoji.value = undefined
+    showPreviewDialog.value = false
+    previewEmoji.value = undefined
 }
 
 const handlePreviewImageError = (event: Event) => {
-  const img = event.target as HTMLImageElement
-  img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMiAyMEM0Mi40IDIwIDQ0IDMwIDQ0IDMwQzQ0IDMwIDQyLjQgNDAgMzIgNDBDMjEuNiA0MCAyMCAzMCAyMCAzMEMyMCAzMCAyMS42IDIwIDMyIDIwWiIgZmlsbD0iI0NDQ0NDQyIvPgo8L3N2Zz4K'
+    const img = event.target as HTMLImageElement
+    img.src =
+        'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0zMiAyMEM0Mi40IDIwIDQ0IDMwIDQ0IDMwQzQ0IDMwIDQyLjQgNDAgMzIgNDBDMjEuNiA0MCAyMCAzMCAyMCAzMEMyMCAzMCAyMS42IDIwIDMyIDIwWiIgZmlsbD0iI0NDQ0NDQyIvPgo8L3N2Zz4K'
 }
 
 const copyPreviewLink = async () => {
-  if (!previewEmojiLink.value) return
+    if (!previewEmojiLink.value) return
 
-  try {
-    await navigator.clipboard.writeText(previewEmojiLink.value)
-    ElMessage.success('链接已复制到剪贴板')
-  } catch (error) {
-    // Fallback for browsers that don't support clipboard API
-    const textArea = document.createElement('textarea')
-    textArea.value = previewEmojiLink.value
-    textArea.style.position = 'fixed'
-    textArea.style.left = '-9999px'
-    textArea.style.top = '-9999px'
-    document.body.appendChild(textArea)
-    textArea.focus()
-    textArea.select()
     try {
-      document.execCommand('copy')
-      ElMessage.success('链接已复制到剪贴板')
-    } catch (err) {
-      ElMessage.error('复制失败，请手动复制')
+        await navigator.clipboard.writeText(previewEmojiLink.value)
+        ElMessage.success('链接已复制到剪贴板')
+    } catch (error) {
+        // Fallback for browsers that don't support clipboard API
+        const textArea = document.createElement('textarea')
+        textArea.value = previewEmojiLink.value
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-9999px'
+        textArea.style.top = '-9999px'
+        document.body.appendChild(textArea)
+        textArea.focus()
+        textArea.select()
+        try {
+            document.execCommand('copy')
+            ElMessage.success('链接已复制到剪贴板')
+        } catch (err) {
+            ElMessage.error('复制失败，请手动复制')
+        }
+        document.body.removeChild(textArea)
     }
-    document.body.removeChild(textArea)
-  }
 }
 
 const handlePreviewEdit = () => {
-  if (previewEmoji.value) {
-    selectedEmoji.value = previewEmoji.value
-    showEditDialog.value = true
-    showPreviewDialog.value = false
-  }
+    if (previewEmoji.value) {
+        selectedEmoji.value = previewEmoji.value
+        showEditDialog.value = true
+        showPreviewDialog.value = false
+    }
 }
 
 const handleAIAnalyze = async () => {
-  if (!previewEmoji.value) return
+    if (!previewEmoji.value) return
 
-  aiCategorizingId.value = previewEmoji.value.id
+    aiCategorizingId.value = previewEmoji.value.id
 
-  try {
-    const result = await send('emojiluna/analyzeEmoji', previewEmoji.value.id)
+    try {
+        const result = await send(
+            'emojiluna/analyzeEmoji',
+            previewEmoji.value.id
+        )
 
-    if (result.success) {
-      const { updates, newData } = result
+        if (result.success) {
+            const { updates, newData } = result
 
-      if (updates.length > 0) {
-        ElMessage.success(`AI分析完成，已更新：${updates.join(', ')}`)
+            if (updates.length > 0) {
+                ElMessage.success(`AI分析完成，已更新：${updates.join(', ')}`)
 
-        if (previewEmoji.value) {
-          previewEmoji.value.category = newData.category
-          previewEmoji.value.tags = newData.tags
+                if (previewEmoji.value) {
+                    previewEmoji.value.category = newData.category
+                    previewEmoji.value.tags = newData.tags
+                }
+
+                await refreshData()
+            } else {
+                ElMessage.info('没有检测到需要更新的内容')
+            }
+        } else {
+            ElMessage.info(result.message || 'AI分析未返回结果')
         }
-
-        await refreshData()
-      } else {
-        ElMessage.info('没有检测到需要更新的内容')
-      }
-    } else {
-      ElMessage.info(result.message || 'AI分析未返回结果')
+    } catch (error) {
+        console.error('AI分析失败:', error)
+        ElMessage.error(`AI分析失败: ${error.message || error}`)
+    } finally {
+        aiCategorizingId.value = ''
     }
-  } catch (error) {
-    console.error('AI分析失败:', error)
-    ElMessage.error(`AI分析失败: ${error.message || error}`)
-  } finally {
-    aiCategorizingId.value = ''
-  }
 }
 
 // Determine per-emoji status for UI indicator
 const getStatus = (emoji: EmojiItem): 'pending' | 'failed' | undefined => {
-  // If this emoji is currently being categorized in preview, mark as pending
-  if (aiCategorizingId.value && emoji.id === aiCategorizingId.value) return 'pending'
+    // If this emoji is currently being categorized in preview, mark as pending
+    if (aiCategorizingId.value && emoji.id === aiCategorizingId.value)
+        return 'pending'
 
-  // If backend reports a failed AI task for this emoji, mark as failed
-  if (failedEmojiIds.value && failedEmojiIds.value.has(emoji.id)) return 'failed'
+    // If backend reports a failed AI task for this emoji, mark as failed
+    if (failedEmojiIds.value && failedEmojiIds.value.has(emoji.id))
+        return 'failed'
 
-  // Heuristic: mark as pending when it appears unanalyzed
-  if ((!emoji.tags || emoji.tags.length === 0) && (!emoji.category || emoji.category === '其他')) return 'pending'
+    // Heuristic: mark as pending when it appears unanalyzed
+    if (
+        (!emoji.tags || emoji.tags.length === 0) &&
+        (!emoji.category || emoji.category === '其他')
+    )
+        return 'pending'
 
-  // Otherwise treat as succeeded (analyzed)
-  return undefined
+    // Otherwise treat as succeeded (analyzed)
+    return undefined
 }
 
 // onMounted(refreshData) -- call handled above in initialization that also updates AI stats
@@ -929,37 +1052,37 @@ const getStatus = (emoji: EmojiItem): 'pending' | 'failed' | undefined => {
 
 <style scoped>
 .emoji-manager {
-  position: relative;
-  min-height: 100%;
+    position: relative;
+    min-height: 100%;
 }
 
 .toolbar-container {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: var(--k-bg-light); /* fallback */
-  background: var(--k-color-base);
-  padding: 12px 0;
-  margin-bottom: 12px;
-  border-bottom: 1px solid transparent;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--k-bg-light); /* fallback */
+    background: var(--k-color-base);
+    padding: 12px 0;
+    margin-bottom: 12px;
+    border-bottom: 1px solid transparent;
 }
 
 .toolbar-main {
-  display: flex;
-  gap: 12px;
-  align-items: center;
+    display: flex;
+    gap: 12px;
+    align-items: center;
 }
 
 .search-section {
-  flex: 1;
-  max-width: 400px;
+    flex: 1;
+    max-width: 400px;
 }
 
 .search-input :deep(.el-input__wrapper) {
-  border-radius: 20px;
-  background-color: var(--k-color-surface-1);
-  box-shadow: none !important;
-  border: 1px solid var(--k-color-divider);
+    border-radius: 20px;
+    background-color: var(--k-color-surface-1);
+    box-shadow: none !important;
+    border: 1px solid var(--k-color-divider);
 }
 
 .search-input :deep(.el-input__wrapper:hover),
@@ -968,10 +1091,10 @@ const getStatus = (emoji: EmojiItem): 'pending' | 'failed' | undefined => {
 }
 
 .actions-section {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-left: auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-left: auto;
 }
 
 .ai-status-tag {
@@ -1000,10 +1123,10 @@ const getStatus = (emoji: EmojiItem): 'pending' | 'failed' | undefined => {
 }
 
 .active-filters {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-  flex-wrap: wrap;
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
 }
 
 .emoji-grid-container {
@@ -1012,18 +1135,18 @@ const getStatus = (emoji: EmojiItem): 'pending' | 'failed' | undefined => {
 }
 
 .emoji-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
-  align-content: start;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+    align-content: start;
 }
 
 /* Pagination */
 .pagination {
-  display: flex;
-  justify-content: center;
-  padding: 20px 0;
+    display: flex;
+    justify-content: center;
+    padding: 20px 0;
 }
 
 /* Floating Action Bar */
@@ -1039,7 +1162,7 @@ const getStatus = (emoji: EmojiItem): 'pending' | 'failed' | undefined => {
     display: flex;
     align-items: center;
     gap: 24px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     z-index: 100;
 }
 
@@ -1056,13 +1179,13 @@ const getStatus = (emoji: EmojiItem): 'pending' | 'failed' | undefined => {
 /* Transitions */
 .slide-up-enter-active,
 .slide-up-leave-active {
-  transition: all 0.3s ease;
+    transition: all 0.3s ease;
 }
 
 .slide-up-enter-from,
 .slide-up-leave-to {
-  transform: translate(-50%, 100%);
-  opacity: 0;
+    transform: translate(-50%, 100%);
+    opacity: 0;
 }
 
 /* Preview Dialog Styles */
