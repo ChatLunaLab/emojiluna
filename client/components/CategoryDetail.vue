@@ -28,6 +28,10 @@
         </el-button>
 
         <template v-if="!isSelectionMode">
+             <el-button type="danger" plain @click="handleDeleteCurrentCategory">
+                <el-icon><Delete /></el-icon>
+                删除分类
+             </el-button>
              <el-button @click="showImportDialog = true">
                 <el-icon><Download /></el-icon>
                 导入
@@ -356,12 +360,12 @@ const { isDragSelecting, selectionBox, handleMouseDown } = useDragSelect(
 // Computed
 const previewEmojiUrl = computed(() => {
   if (!previewEmoji.value) return ''
-  return `${baseUrl.value}/get/${previewEmoji.value.name}`
+  return `${baseUrl.value}/get/${previewEmoji.value.id}`
 })
 
 const previewEmojiLink = computed(() => {
   if (!previewEmoji.value) return ''
-  return `${baseUrl.value}/get/${previewEmoji.value.name}`
+  return `${baseUrl.value}/get/${previewEmoji.value.id}`
 })
 
 // Loading
@@ -450,6 +454,39 @@ const handleEmojiDelete = async (emoji: EmojiItem) => {
     if (error !== 'cancel') {
       console.error('Failed to delete emoji:', error)
       ElMessage.error('删除失败')
+    }
+  }
+}
+
+const handleDeleteCurrentCategory = async () => {
+  if (!props.category) return
+
+  try {
+    const emojisInCategory: EmojiItem[] =
+      (await send('emojiluna/getEmojiList', { category: props.category.name })) || []
+    const emojiCount = emojisInCategory.length
+
+    const confirmText = emojiCount > 0
+      ? `确定要删除分类 "${props.category.name}" 吗？\n这会同时删除该分类下的 ${emojiCount} 个表情包。`
+      : `确定要删除分类 "${props.category.name}" 吗？`
+
+    await ElMessageBox.confirm(
+      confirmText,
+      '警告',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    await send('emojiluna/deleteCategory', props.category.id, emojiCount > 0)
+    ElMessage.success('分类删除成功')
+    emit('back')
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('Failed to delete category:', error)
+      ElMessage.error('删除分类失败')
     }
   }
 }

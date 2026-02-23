@@ -76,7 +76,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<Emits>()
 
 const emojiUrl = computed(() => {
-    return `${props.baseUrl}/get/${props.emoji.name}`
+    return `${props.baseUrl}/get/${props.emoji.id}`
 })
 
 const handleImageError = (event: Event) => {

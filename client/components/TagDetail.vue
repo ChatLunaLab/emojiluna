@@ -26,6 +26,10 @@
         </el-button>
 
         <template v-if="!isSelectionMode">
+             <el-button type="danger" plain @click="handleDeleteCurrentTag" :loading="processing">
+                <el-icon><Delete /></el-icon>
+                删除标签
+             </el-button>
              <el-button @click="showImportDialog = true">
                 <el-icon><Plus /></el-icon>
                 添加表情包
@@ -280,7 +284,7 @@ const { isDragSelecting, selectionBox, handleMouseDown } = useDragSelect(
 
 const previewEmojiUrl = computed(() => {
   if (!previewEmoji.value) return ''
-  return `${baseUrl.value}/get/${previewEmoji.value.name}`
+  return `${baseUrl.value}/get/${previewEmoji.value.id}`
 })
 
 const loadEmojis = async () => {
@@ -412,6 +416,37 @@ const handleBatchRemoveTag = async () => {
         refreshData()
     } catch (e) {
         console.error(e)
+    } finally {
+        processing.value = false
+    }
+}
+
+const handleDeleteCurrentTag = async () => {
+    if (!props.tagName) return
+
+    try {
+        const emojisWithTag: EmojiItem[] = await send('emojiluna/getEmojiList', { tags: [props.tagName] }) || []
+        const count = emojisWithTag.length
+
+        await ElMessageBox.confirm(
+            `确定要删除标签 #${props.tagName} 吗？${count > 0 ? `\n这会从 ${count} 个表情包中移除此标签。` : ''}`,
+            '警告',
+            { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+        )
+
+        processing.value = true
+        await Promise.all(emojisWithTag.map((emoji) => {
+            const newTags = emoji.tags.filter((tag) => tag !== props.tagName)
+            return send('emojiluna/updateEmojiTags', emoji.id, newTags)
+        }))
+
+        ElMessage.success('标签删除成功')
+        emit('back')
+    } catch (error) {
+        if (error !== 'cancel') {
+            console.error('Failed to delete tag:', error)
+            ElMessage.error('删除标签失败')
+        }
     } finally {
         processing.value = false
     }

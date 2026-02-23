@@ -374,12 +374,12 @@ const { isDragSelecting, selectionBox, handleMouseDown } = useDragSelect(
 
 const previewEmojiUrl = computed(() => {
   if (!previewEmoji.value) return ''
-  return `${baseUrl.value}/get/${previewEmoji.value.name}`
+  return `${baseUrl.value}/get/${previewEmoji.value.id}`
 })
 
 const previewEmojiLink = computed(() => {
   if (!previewEmoji.value) return ''
-  return `${baseUrl.value}/get/${previewEmoji.value.name}`
+  return `${baseUrl.value}/get/${previewEmoji.value.id}`
 })
 
 const formatSize = (bytes: number) => {

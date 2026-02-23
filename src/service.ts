@@ -743,7 +743,10 @@ export class EmojiLunaService extends Service {
         )
     }
 
-    async deleteCategory(id: string): Promise<boolean> {
+    async deleteCategory(
+        id: string,
+        deleteEmojis: boolean = false
+    ): Promise<boolean> {
         const category = this._categories[id]
         if (!category) return false
 
@@ -752,7 +755,16 @@ export class EmojiLunaService extends Service {
         )
 
         if (emojisInCategory.length > 0) {
-            throw new Error(`分类 ${category.name} 中还有表情包，无法删除`)
+            if (!deleteEmojis) {
+                throw new Error(`分类 ${category.name} 中还有表情包，无法删除`)
+            }
+
+            const results = await Promise.all(
+                emojisInCategory.map((emoji) => this.deleteEmoji(emoji.id))
+            )
+            if (results.some((success) => !success)) {
+                throw new Error(`分类 ${category.name} 下部分表情包删除失败`)
+            }
         }
 
         delete this._categories[id]
@@ -789,6 +801,13 @@ export class EmojiLunaService extends Service {
         const emoji = this._emojiStorage[id]
         const nextName = name.trim()
         if (!emoji || !nextName) return false
+
+        if (emoji.name === nextName) return true
+
+        const duplicated = Object.values(this._emojiStorage).some(
+            (item) => item.id !== id && item.name === nextName
+        )
+        if (duplicated) return false
 
         emoji.name = nextName
         await this.ctx.database.upsert('emojiluna_emojis', [

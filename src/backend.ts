@@ -138,9 +138,12 @@ export async function applyBackend(ctx: Context, config: Config) {
             }
         )
 
-        ctx.console.addListener('emojiluna/deleteCategory', async (id) => {
-            return await ctx.emojiluna.deleteCategory(id)
-        })
+        ctx.console.addListener(
+            'emojiluna/deleteCategory',
+            async (id, deleteEmojis = false) => {
+                return await ctx.emojiluna.deleteCategory(id, deleteEmojis)
+            }
+        )
 
         ctx.console.addListener('emojiluna/addEmoji', async (emojiData) => {
             // 处理base64图片数据

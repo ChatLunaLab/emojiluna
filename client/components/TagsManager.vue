@@ -236,7 +236,7 @@ const handleSearch = () => {
 }
 
 const getEmojiUrl = (emoji: EmojiItem) => {
-    return `${baseUrl.value}/get/${emoji.name}`
+    return `${baseUrl.value}/get/${emoji.id}`
 }
 
 const handleImageError = (event: Event) => {
