@@ -517,6 +517,8 @@ const handleDeleteCurrentCategory = async () => {
         }
     }
 }
+    }
+}
 
 // Selection Logic
 const toggleSelectionMode = () => {

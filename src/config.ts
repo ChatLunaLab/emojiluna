@@ -203,8 +203,39 @@ ${IMAGE_CONTENT_TYPES.map((item) => `- ${item.type}: ${item.label} - ${item.desc
             .default(false),
         backendPath: Schema.string()
             .description('后端服务器路径')
-            .default('/emojiluna')
+            .default('/emojiluna'),
+        uploadToken: Schema.string()
+            .description('上传接口 API Token（可选）')
+            .default('')
     }).description('API 配置'),
+
+    Schema.object({
+        batchSize: Schema.number()
+            .description('批量处理大小（上传/分析）')
+            .min(1)
+            .max(20)
+            .default(6),
+        aiConcurrency: Schema.number()
+            .description('AI 分析并发数')
+            .min(1)
+            .max(10)
+            .default(3),
+        AIBatchDelay: Schema.number()
+            .description('AI 批次间延迟(ms)')
+            .min(0)
+            .max(5000)
+            .default(300),
+        AIMaxAttempts: Schema.number()
+            .description('AI 分析最大重试次数')
+            .min(1)
+            .max(10)
+            .default(3),
+        AIBackoffBase: Schema.number()
+            .description('AI 重试退避基数(ms)')
+            .min(100)
+            .max(10000)
+            .default(1000)
+    }).description('性能与并发配置'),
 
     Schema.object({
         minEmojiSize: Schema.number()
@@ -284,12 +315,19 @@ export interface Config {
     injectVariablesLimit: number
     backendServer: boolean
     backendPath: string
+    uploadToken: string
     groupAutoCollectLimit: Record<
         string,
         { hourLimit: number; dayLimit: number }
     >
     enableImageTypeFilter: boolean
     acceptedImageTypes: ImageContentType[]
+    // Performance & Concurrency
+    batchSize: number
+    aiConcurrency: number
+    AIBatchDelay: number
+    AIMaxAttempts: number
+    AIBackoffBase: number
 }
 
 export const name = 'emojiluna'

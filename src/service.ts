@@ -1,5 +1,6 @@
 import { Context, Service } from 'koishi'
 import { Config } from './config'
+import { UploadManager } from './uploadManager'
 import {
     AIAnalyzeResult,
     AICategorizeResult,
@@ -27,7 +28,7 @@ import {
 import { extractSampledFrames, getImageMetadata } from './imageProcessor'
 import path from 'path'
 import fs from 'fs/promises'
-import { randomUUID } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import { parseRawModelName } from 'koishi-plugin-chatluna/llm-core/utils/count_tokens'
 import { ChatLunaChatModel } from 'koishi-plugin-chatluna/llm-core/platform/model'
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
@@ -42,6 +43,8 @@ export class EmojiLunaService extends Service {
     private _isInitialized = false
     private _readyPromise: Promise<void>
     private _readyResolve: () => void
+    private _isDisposed = false
+    private _uploadManager: UploadManager
 
     constructor(
         ctx: Context,
@@ -49,6 +52,22 @@ export class EmojiLunaService extends Service {
     ) {
         super(ctx, 'emojiluna', true)
         defineDatabase(ctx)
+        this._uploadManager = new UploadManager(ctx, config)
+        this._uploadManager.setTaskProcessor({
+            analyzeEmoji: (base64) => this.analyzeEmoji(base64),
+            updateEmojiInfo: (id, updates) => this.updateEmojiInfo(id, updates),
+            getEmojiById: async (id) => {
+                const emoji = this._emojiStorage[id]
+                if (!emoji) return null
+                return {
+                    id: emoji.id,
+                    name: emoji.name,
+                    category: emoji.category,
+                    tags: emoji.tags,
+                    path: emoji.path
+                }
+            }
+        })
         this._readyPromise = new Promise((resolve) => {
             this._readyResolve = resolve
         })
@@ -57,6 +76,7 @@ export class EmojiLunaService extends Service {
             await this.initializeAI()
             this._isInitialized = true
             this._readyResolve()
+            this._uploadManager.startAITaskProcessor()
         })
     }
 
@@ -78,8 +98,10 @@ export class EmojiLunaService extends Service {
 
         await this.loadEmojis()
         await this.loadCategories()
+        await this._uploadManager.loadExistingHashes()
 
         this.ctx.on('dispose', () => {
+            this._isDisposed = true
             this._emojiStorage = {}
             this._categories = {}
             this._model = null
@@ -115,7 +137,7 @@ export class EmojiLunaService extends Service {
         return null
     }
 
-    private async buildAiImages(
+    private async buildAIImages(
         imageBase64: string
     ): Promise<{ data: string; mimeType: string }[]> {
         try {
@@ -130,11 +152,12 @@ export class EmojiLunaService extends Service {
             }
 
             // 多帧图片使用原始格式编码
-            const { frames } = await extractSampledFrames(
-                buffer,
-                EmojiLunaService.AI_FRAME_SAMPLES,
-                metadata.format as 'png' | 'jpeg' | 'webp'
-            )
+            const { frames, metadata: framesMetadata } =
+                await extractSampledFrames(
+                    buffer,
+                    EmojiLunaService.AI_FRAME_SAMPLES,
+                    metadata.format as 'png' | 'jpeg' | 'webp'
+                )
 
             if (frames.length === 0) {
                 return [
@@ -144,7 +167,7 @@ export class EmojiLunaService extends Service {
 
             return frames.map((frame) => ({
                 data: frame.toString('base64'),
-                mimeType: `image/${metadata.format}`
+                mimeType: `image/${framesMetadata.format}`
             }))
         } catch (error) {
             this.ctx.logger.warn(
@@ -164,14 +187,14 @@ export class EmojiLunaService extends Service {
                 '{categories}',
                 this.config.categories.join(', ')
             )
-            const images = await this.buildAiImages(imageBase64)
+            const images = await this.buildAIImages(imageBase64)
             const result = await this._model.value.invoke([
                 new SystemMessage(prompt),
                 new HumanMessage({
                     content: [
                         {
                             type: 'text',
-                            text: '请分析这个表情包'
+                            text: 'Please analyze this emoji'
                         },
                         ...images.map((image) => ({
                             type: 'image_url',
@@ -199,7 +222,7 @@ export class EmojiLunaService extends Service {
 
             return parsedResult
         } catch (error) {
-            this.ctx.logger.error('AI分类失败:', error)
+            this.ctx.logger.error('AI categorization failed:', error)
             return null
         }
     }
@@ -212,14 +235,14 @@ export class EmojiLunaService extends Service {
                 '{categories}',
                 this.config.categories.join(', ')
             )
-            const images = await this.buildAiImages(imageBase64)
+            const images = await this.buildAIImages(imageBase64)
             const result = await this._model.value.invoke([
                 new SystemMessage(prompt),
                 new HumanMessage({
                     content: [
                         {
                             type: 'text',
-                            text: '请分析这个表情包'
+                            text: 'Please analyze this emoji'
                         },
                         ...images.map((image) => ({
                             type: 'image_url',
@@ -247,7 +270,7 @@ export class EmojiLunaService extends Service {
 
             return parsedResult
         } catch (error) {
-            this.ctx.logger.error('AI分析失败:', error)
+            this.ctx.logger.error('AI analysis failed:', error)
             return null
         }
     }
@@ -260,14 +283,14 @@ export class EmojiLunaService extends Service {
         }
 
         try {
-            const images = await this.buildAiImages(imageBase64)
+            const images = await this.buildAIImages(imageBase64)
             const result = await this._model.value.invoke([
                 new SystemMessage(this.config.imageFilterPrompt),
                 new HumanMessage({
                     content: [
                         {
                             type: 'text',
-                            text: '请分析这个表情包'
+                            text: 'Please analyze this emoji'
                         },
                         ...images.map((image) => ({
                             type: 'image_url',
@@ -308,6 +331,126 @@ export class EmojiLunaService extends Service {
         }
     }
 
+    private calculateFileHash(buffer: Buffer): string {
+        return createHash('sha256').update(buffer).digest('hex')
+    }
+
+    async addEmojiFromPath(
+        options: EmojiAddOptions,
+        sourcePath: string,
+        aiAnalysis: boolean = this.config.autoAnalyze
+    ): Promise<EmojiItem> {
+        const id = randomUUID()
+        const imageBuffer = await fs.readFile(sourcePath)
+        const mimeType = getImageType(imageBuffer)
+        const extension = getImageType(imageBuffer, true)
+
+        // Use UploadManager to calculate hash and validate early
+        const imageHash = this._uploadManager.calculateHash(imageBuffer)
+        const validationError = await this._uploadManager.validateNewEmoji(
+            imageBuffer,
+            imageHash
+        )
+        if (validationError) {
+            try {
+                await fs.unlink(sourcePath)
+            } catch (_) {}
+            throw new Error(validationError)
+        }
+
+        const fileName = `${id}.${extension}`
+        const storageDir = path.resolve(
+            this.ctx.baseDir,
+            this.config.storagePath
+        )
+        const destPath = path.join(storageDir, fileName)
+
+        await fs.mkdir(storageDir, { recursive: true })
+
+        // Move file using UploadManager helper (handles cross-device EXDEV)
+        await this._uploadManager.finalizeFile(sourcePath, destPath)
+
+        // Register emoji in UploadManager cache
+        this._uploadManager.registerEmoji(id, imageHash)
+
+        let finalOptions = { ...options }
+
+        // Try cache lookup first if AI is requested
+        let aiTaskCreated = false
+        if (aiAnalysis) {
+            const cachedResult =
+                this._uploadManager.getCachedAIResult(imageHash)
+            if (cachedResult) {
+                finalOptions = {
+                    name: cachedResult.name || options.name,
+                    category:
+                        cachedResult.category || options.category || 'Other',
+                    tags: [
+                        ...new Set([
+                            ...(options.tags || []),
+                            ...(cachedResult.tags || [])
+                        ])
+                    ],
+                    description: cachedResult.description
+                }
+            } else {
+                // Queue for async AI analysis
+                this._uploadManager.queueAIAnalysis(id, destPath, imageHash)
+                aiTaskCreated = true
+            }
+        }
+
+        if (!aiTaskCreated && aiAnalysis) {
+            // No cached result and no task created - do legacy blocking analysis
+            const imageBase64 = imageBuffer.toString('base64')
+            const aiResult = await this.analyzeEmoji(imageBase64)
+            if (aiResult) {
+                finalOptions = {
+                    name: aiResult.name || options.name,
+                    category: aiResult.category || options.category || 'Other',
+                    tags: [
+                        ...new Set([...(options.tags || []), ...aiResult.tags])
+                    ],
+                    description: aiResult.description
+                }
+            } else {
+                throw new Error('AI analysis failed, unable to add emoji')
+            }
+        }
+
+        const emoji: EmojiItem = {
+            id,
+            name: finalOptions.name,
+            category: finalOptions.category || 'Other',
+            path: destPath,
+            size: imageBuffer.length,
+            mimeType,
+            createdAt: new Date(),
+            tags: finalOptions.tags || []
+        }
+
+        this._emojiStorage[id] = emoji
+
+        await this.ctx.database.upsert('emojiluna_emojis', [
+            {
+                id: emoji.id,
+                name: emoji.name,
+                category: emoji.category,
+                path: emoji.path,
+                size: emoji.size,
+                mime_type: emoji.mimeType,
+                created_at: emoji.createdAt,
+                tags: JSON.stringify(emoji.tags),
+                image_hash: imageHash
+            }
+        ])
+
+        await this.updateCategoryEmojiCount(emoji.category)
+        this.ctx.logger.success(`Emoji added: ${emoji.name} (${emoji.id})`)
+        this.ctx.emit('emojiluna/emoji-added', emoji)
+        return emoji
+    }
+
     async addEmoji(
         options: EmojiAddOptions,
         imageData: Buffer,
@@ -316,32 +459,54 @@ export class EmojiLunaService extends Service {
         const id = randomUUID()
         const mimeType = getImageType(imageData)
         const extension = getImageType(imageData, true)
-        const fileName = `${id}.${extension}`
+
+        // Use UploadManager to calculate hash and validate
+        const imageHash = this._uploadManager.calculateHash(imageData)
+        const validationError = await this._uploadManager.validateNewEmoji(
+            imageData,
+            imageHash
+        )
+        if (validationError) {
+            throw new Error(validationError)
+        }
+
+        // Prepare file in storage directory
         const storageDir = path.resolve(
             this.ctx.baseDir,
             this.config.storagePath
         )
+        const fileName = `${id}.${extension}`
         const filePath = path.join(storageDir, fileName)
 
         await fs.mkdir(storageDir, { recursive: true })
         await fs.writeFile(filePath, imageData)
 
+        // Register emoji in UploadManager cache
+        this._uploadManager.registerEmoji(id, imageHash)
+
         let finalOptions = { ...options }
 
         if (aiAnalysis) {
-            const imageBase64 = imageData.toString('base64')
-            const aiResult = await this.analyzeEmoji(imageBase64)
-            if (aiResult) {
+            // Check in-memory cache or queue task for AI analysis
+            const cachedResult =
+                this._uploadManager.getCachedAIResult(imageHash)
+
+            if (cachedResult) {
                 finalOptions = {
-                    name: aiResult.name || options.name,
-                    category: aiResult.category || options.category || '其他',
+                    name: cachedResult.name || options.name,
+                    category:
+                        cachedResult.category || options.category || 'Other',
                     tags: [
-                        ...new Set([...(options.tags || []), ...aiResult.tags])
+                        ...new Set([
+                            ...(options.tags || []),
+                            ...(cachedResult.tags || [])
+                        ])
                     ],
-                    description: aiResult.description
+                    description: cachedResult.description
                 }
             } else {
-                throw new Error('AI分析失败，无法添加表情包')
+                // Queue for async AI analysis
+                this._uploadManager.queueAIAnalysis(id, filePath, imageHash)
             }
         } else if (this.config.autoCategorize && !options.category) {
             const imageBase64 = imageData.toString('base64')
@@ -349,14 +514,14 @@ export class EmojiLunaService extends Service {
             if (categorizeResult) {
                 finalOptions.category = categorizeResult.category
             } else {
-                throw new Error('AI分类失败，无法添加表情包')
+                throw new Error('AI categorization failed, unable to add emoji')
             }
         }
 
         const emoji: EmojiItem = {
             id,
             name: finalOptions.name,
-            category: finalOptions.category || '其他',
+            category: finalOptions.category || 'Other',
             path: filePath,
             size: imageData.length,
             mimeType,
@@ -375,7 +540,8 @@ export class EmojiLunaService extends Service {
                 size: emoji.size,
                 mime_type: emoji.mimeType,
                 created_at: emoji.createdAt,
-                tags: JSON.stringify(emoji.tags)
+                tags: JSON.stringify(emoji.tags),
+                image_hash: imageHash
             }
         ])
 
@@ -447,10 +613,13 @@ export class EmojiLunaService extends Service {
 
         if (aiAnalysis && pendingAiTasks.length > 0) {
             this.ctx.logger.info(
-                `已上传 ${pendingAiTasks.length} 个表情包，开始后台AI分析`
+                `Uploaded ${pendingAiTasks.length} emojis, starting background AI analysis`
             )
-            void this.runAiAnalysisInBackground(pendingAiTasks).catch((error) =>
-                this.ctx.logger.error('后台AI分析任务异常:', error)
+            this.runAiAnalysisInBackground(pendingAiTasks).catch((error) =>
+                this.ctx.logger.error(
+                    'Background AI analysis task exception:',
+                    error
+                )
             )
         }
 
@@ -496,7 +665,7 @@ export class EmojiLunaService extends Service {
                         })
                     } catch (error) {
                         this.ctx.logger.error(
-                            `后台AI分析失败 ${task.id}:`,
+                            `Background AI analysis failed ${task.id}:`,
                             error
                         )
                     }
@@ -504,7 +673,9 @@ export class EmojiLunaService extends Service {
             )
         }
 
-        this.ctx.logger.info(`后台AI分析完成，共处理 ${tasks.length} 个表情包`)
+        this.ctx.logger.info(
+            `Background AI analysis completed, processed ${tasks.length} emojis`
+        )
     }
 
     private async updateEmojiInfo(
@@ -1030,7 +1201,7 @@ export class EmojiLunaService extends Service {
         const {
             folderPath,
             useSubfoldersAsCategories,
-            defaultCategory = '其他',
+            defaultCategory = 'Other',
             recursive,
             aiAnalysis,
             skipExisting
@@ -1150,6 +1321,26 @@ export class EmojiLunaService extends Service {
         }
     }
 
+    async getAiTaskStats() {
+        return this._uploadManager.getAITaskStats()
+    }
+
+    async getFailedAiEmojiIds(): Promise<string[]> {
+        return this._uploadManager.getFailedAIEmojiIds()
+    }
+
+    public setAiPaused(paused: boolean) {
+        this._uploadManager.setAIPaused(paused)
+    }
+
+    public async retryFailedTasks(): Promise<number> {
+        return this._uploadManager.retryFailedTasks()
+    }
+
+    async reanalyzeBatch(ids: string[]): Promise<number> {
+        return this._uploadManager.reanalyzeBatch(ids)
+    }
+
     static inject = ['database', 'chatluna']
 }
 
@@ -1157,14 +1348,15 @@ function defineDatabase(ctx: Context) {
     ctx.database.extend(
         'emojiluna_emojis',
         {
-            id: { type: 'string', length: 254 },
-            name: { type: 'string', length: 254 },
-            category: { type: 'string', length: 254 },
-            path: { type: 'string', length: 500 },
-            size: { type: 'integer' },
+            id: { type: 'string', length: 36 },
+            name: { type: 'string', length: 255 },
+            category: { type: 'string', length: 255 },
+            path: { type: 'string', length: 1024 },
+            size: { type: 'unsigned' },
             mime_type: { type: 'string', length: 50 },
             created_at: { type: 'timestamp' },
-            tags: { type: 'string' }
+            tags: { type: 'string' },
+            image_hash: { type: 'string', length: 64 }
         },
         {
             autoInc: false,
@@ -1175,10 +1367,10 @@ function defineDatabase(ctx: Context) {
     ctx.database.extend(
         'emojiluna_categories',
         {
-            id: { type: 'string', length: 254 },
-            name: { type: 'string', length: 254 },
+            id: { type: 'string', length: 36 },
+            name: { type: 'string', length: 255 },
             description: { type: 'string', length: 500 },
-            emoji_count: { type: 'integer' },
+            emoji_count: { type: 'unsigned' },
             created_at: { type: 'timestamp' }
         },
         {
@@ -1186,38 +1378,4 @@ function defineDatabase(ctx: Context) {
             primary: 'id'
         }
     )
-}
-
-declare module 'koishi' {
-    interface Context {
-        emojiluna: EmojiLunaService
-    }
-
-    interface Tables {
-        emojiluna_emojis: {
-            id: string
-            name: string
-            category: string
-            path: string
-            size: number
-            mime_type: string
-            created_at: Date
-            tags: string
-        }
-        emojiluna_categories: {
-            id: string
-            name: string
-            description: string
-            emoji_count: number
-            created_at: Date
-        }
-    }
-
-    interface Events {
-        'emojiluna/emoji-added': (emoji: EmojiItem) => void
-        'emojiluna/emoji-deleted': (id: string) => void
-        'emojiluna/emoji-updated': (emoji: EmojiItem) => void
-        'emojiluna/category-added': (category: Category) => void
-        'emojiluna/category-deleted': (id: string) => void
-    }
 }

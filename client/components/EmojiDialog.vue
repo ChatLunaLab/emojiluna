@@ -36,6 +36,7 @@
                         </label>
                         <el-input
                             v-model="form.name"
+                            disabled
                             :placeholder="t('emojiluna.emojiName')"
                         >
                             <template #prefix>
