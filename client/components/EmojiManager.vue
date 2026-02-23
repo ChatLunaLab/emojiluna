@@ -407,26 +407,13 @@ const loadEmojis = async () => {
       options.tags = [selectedTag.value]
     }
 
-    let result
     if (searchKeyword.value.trim()) {
-      result = await send('emojiluna/searchEmoji', searchKeyword.value.trim())
-      // Client-side filtering for category/tags if search is used (since backend search might be global)
-       if (selectedCategory.value) {
-            result = result.filter((e: EmojiItem) => e.category === selectedCategory.value)
-       }
-      emojis.value = result || []
-      total.value = emojis.value.length
-    } else {
-      result = await send('emojiluna/getEmojiList', options)
-      emojis.value = result || []
-
-      // Ideally get count from API, but for now reuse logic
-      const allEmojis = await send('emojiluna/getEmojiList', {
-          category: selectedCategory.value || undefined,
-          tags: selectedTag.value ? [selectedTag.value] : undefined
-      })
-      total.value = allEmojis?.length || 0
+      options.keyword = searchKeyword.value.trim()
     }
+
+    const page = await send('emojiluna/getEmojiPage', options)
+    emojis.value = page?.items || []
+    total.value = page?.total || 0
   } catch (error) {
     console.error('Failed to load emojis:', error)
     ElMessage.error('加载表情包失败')
@@ -471,17 +458,20 @@ const handleFilterCommand = (command: any) => {
         resetFilters()
     } else if (command.type === 'category') {
         selectedCategory.value = command.value
+        currentPage.value = 1
         loadEmojis()
     }
 }
 
 const clearCategoryFilter = () => {
     selectedCategory.value = ''
+    currentPage.value = 1
     loadEmojis()
 }
 
 const clearTagFilter = () => {
     selectedTag.value = ''
+    currentPage.value = 1
     loadEmojis()
 }
 

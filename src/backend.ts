@@ -80,6 +80,13 @@ export async function applyBackend(ctx: Context, config: Config) {
             }
         )
 
+        ctx.console.addListener(
+            'emojiluna/getEmojiPage',
+            async (options = {}) => {
+                return await ctx.emojiluna.getEmojiPage(options)
+            }
+        )
+
         ctx.console.addListener('emojiluna/searchEmoji', async (keyword) => {
             return await ctx.emojiluna.searchEmoji(keyword)
         })
@@ -87,6 +94,13 @@ export async function applyBackend(ctx: Context, config: Config) {
         ctx.console.addListener('emojiluna/getCategories', async () => {
             return await ctx.emojiluna.getCategories()
         })
+
+        ctx.console.addListener(
+            'emojiluna/getCategoriesPage',
+            async (options = {}) => {
+                return await ctx.emojiluna.getCategoriesPage(options)
+            }
+        )
 
         ctx.console.addListener('emojiluna/getAllTags', async () => {
             return await ctx.emojiluna.getAllTags()
@@ -258,8 +272,42 @@ export async function applyBackend(ctx: Context, config: Config) {
     ctx.inject(['server', 'emojiluna'], async (ctx) => {
         await ctx.emojiluna.ready
 
+        const getSingleQuery = (value: unknown): string | undefined => {
+            if (Array.isArray(value)) return value[0]
+            if (typeof value === 'string') return value
+            return undefined
+        }
+
+        const getPaginationParams = (query: Record<string, unknown>) => {
+            const limitText = getSingleQuery(query.limit)
+            const offsetText = getSingleQuery(query.offset)
+            const limit = limitText ? Number(limitText) : undefined
+            const offset = offsetText ? Number(offsetText) : undefined
+            return {
+                limit:
+                    typeof limit === 'number' && Number.isFinite(limit)
+                        ? limit
+                        : undefined,
+                offset:
+                    typeof offset === 'number' && Number.isFinite(offset)
+                        ? offset
+                        : undefined
+            }
+        }
+
         ctx.server.get(`${config.backendPath}/list`, async (koa) => {
-            const emojis = await ctx.emojiluna.getEmojiList()
+            const keyword = getSingleQuery(koa.request.query.keyword)
+            const category = getSingleQuery(koa.request.query.category)
+            const tag = getSingleQuery(koa.request.query.tag)
+            const { limit, offset } = getPaginationParams(koa.request.query)
+
+            const emojis = await ctx.emojiluna.getEmojiList({
+                keyword,
+                category,
+                tags: tag ? [tag] : undefined,
+                limit,
+                offset
+            })
 
             koa.set('Content-Type', 'application/json')
 
@@ -278,10 +326,17 @@ export async function applyBackend(ctx: Context, config: Config) {
         })
 
         ctx.server.get(`${config.backendPath}/categories`, async (koa) => {
-            const categories = await ctx.emojiluna.getCategories()
+            const keyword = getSingleQuery(koa.request.query.keyword)
+            const { limit, offset } = getPaginationParams(koa.request.query)
+
+            const categories = await ctx.emojiluna.getCategoriesPage({
+                keyword,
+                limit,
+                offset
+            })
 
             koa.set('Content-Type', 'application/json')
-            koa.body = JSON.stringify(categories)
+            koa.body = JSON.stringify(categories.items)
         })
 
         ctx.server.get(

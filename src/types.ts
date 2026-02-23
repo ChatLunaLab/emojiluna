@@ -25,6 +25,19 @@ export interface EmojiSearchOptions {
     offset?: number
 }
 
+export interface CategorySearchOptions {
+    keyword?: string
+    limit?: number
+    offset?: number
+}
+
+export interface PaginatedResult<T> {
+    items: T[]
+    total: number
+    limit: number
+    offset: number
+}
+
 export interface EmojiAddOptions {
     name: string
     category?: string
@@ -185,8 +198,14 @@ declare module '@koishijs/console' {
         'emojiluna/getEmojiList': (
             options?: EmojiSearchOptions
         ) => Promise<EmojiItem[]>
+        'emojiluna/getEmojiPage': (
+            options?: EmojiSearchOptions
+        ) => Promise<PaginatedResult<EmojiItem>>
         'emojiluna/searchEmoji': (keyword: string) => Promise<EmojiItem[]>
         'emojiluna/getCategories': () => Promise<Category[]>
+        'emojiluna/getCategoriesPage': (
+            options?: CategorySearchOptions
+        ) => Promise<PaginatedResult<Category>>
         'emojiluna/getAllTags': () => Promise<string[]>
         'emojiluna/updateEmojiTags': (
             id: string,

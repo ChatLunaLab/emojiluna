@@ -288,7 +288,7 @@ import EmojiCard from './EmojiCard.vue'
 import EmojiDialog from './EmojiDialog.vue'
 import AddEmojiDialog from './AddEmojiDialog.vue'
 import ImageSelector from './ImageSelector.vue'
-import type { EmojiItem, Category } from 'koishi-plugin-emojiluna'
+import type { EmojiItem, Category, EmojiSearchOptions } from 'koishi-plugin-emojiluna'
 import { useDragSelect } from '../composables/useDragSelect'
 
 const { t } = useI18n()
@@ -370,35 +370,19 @@ const loadEmojis = async () => {
 
   loading.value = true
   try {
-    const options = {
+    const options: EmojiSearchOptions = {
       category: props.category.name,
       limit: pageSize.value,
       offset: (currentPage.value - 1) * pageSize.value
     }
 
-    let result
     if (searchKeyword.value.trim()) {
-      // Client side filter after global search
-      const allResults = await send('emojiluna/searchEmoji', searchKeyword.value.trim())
-      result = allResults?.filter((emoji: EmojiItem) => emoji.category === props.category?.name) || []
-      emojis.value = result
-      total.value = result.length
-    } else {
-      result = await send('emojiluna/getEmojiList', options)
-      emojis.value = result || []
-
-      // Get total count for category
-      // Optimization: The category object passed in prop has 'emojiCount'.
-      // But it might be stale.
-      // Let's rely on backend if we can, or just use the prop.
-      // Re-fetching category list to get fresh count might be better.
-      // Or separate API for count.
-      // For now, let's fetch all (limitless) to count? No, that's heavy.
-      // Let's use `getEmojiList` without limit for this category to count? Still heavy?
-      // Actually `getEmojiList` without limit returns all ids, which is okay for < 1000 items.
-      const allInCategory = await send('emojiluna/getEmojiList', { category: props.category.name })
-      total.value = allInCategory?.length || 0
+      options.keyword = searchKeyword.value.trim()
     }
+
+    const page = await send('emojiluna/getEmojiPage', options)
+    emojis.value = page?.items || []
+    total.value = page?.total || 0
 
     // Also load all categories for Move Dialog
     if (allCategories.value.length === 0) {

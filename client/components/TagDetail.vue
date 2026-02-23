@@ -218,7 +218,7 @@ import {
 import EmojiCard from './EmojiCard.vue'
 import EmojiDialog from './EmojiDialog.vue'
 import ImageSelector from './ImageSelector.vue'
-import type { EmojiItem } from 'koishi-plugin-emojiluna'
+import type { EmojiItem, EmojiSearchOptions } from 'koishi-plugin-emojiluna'
 import { useDragSelect } from '../composables/useDragSelect'
 
 const { t } = useI18n()
@@ -288,25 +288,19 @@ const loadEmojis = async () => {
 
   loading.value = true
   try {
-    const options = {
+    const options: EmojiSearchOptions = {
       tags: [props.tagName],
       limit: pageSize.value,
       offset: (currentPage.value - 1) * pageSize.value
     }
 
-    let result
     if (searchKeyword.value.trim()) {
-      const allResults = await send('emojiluna/searchEmoji', searchKeyword.value.trim())
-      result = allResults?.filter((emoji: EmojiItem) => emoji.tags.includes(props.tagName)) || []
-      emojis.value = result
-      total.value = result.length
-    } else {
-      result = await send('emojiluna/getEmojiList', options)
-      emojis.value = result || []
-
-      const allInTag = await send('emojiluna/getEmojiList', { tags: [props.tagName] })
-      total.value = allInTag?.length || 0
+      options.keyword = searchKeyword.value.trim()
     }
+
+    const page = await send('emojiluna/getEmojiPage', options)
+    emojis.value = page?.items || []
+    total.value = page?.total || 0
 
     if (!baseUrl.value) {
         baseUrl.value = await send('emojiluna/getBaseUrl') || '/emojiluna'
