@@ -36,27 +36,6 @@
                     <el-icon><Files /></el-icon>
                     <span>{{ t('emojiluna.folderImport.scanResult') }}</span>
                 </div>
-                <div class="scan-stats">
-                    <div class="stat-item">
-                        <span class="stat-value">
-                            {{ scanResult.totalFiles }}
-                        </span>
-                        <span class="stat-label">
-                            {{ t('emojiluna.folderImport.imageFiles') }}
-                        </span>
-                    </div>
-                    <div
-                        class="stat-item"
-                        v-if="scanResult.subfolders.length > 0"
-                    >
-                        <span class="stat-value">
-                            {{ scanResult.subfolders.length }}
-                        </span>
-                        <span class="stat-label">
-                            {{ t('emojiluna.folderImport.subfolders') }}
-                        </span>
-                    </div>
-                </div>
                 <div
                     class="subfolder-list"
                     v-if="scanResult.subfolders.length > 0"
@@ -548,29 +527,6 @@ onMounted(() => {
     font-weight: 600;
     color: var(--k-color-text);
     margin-bottom: 12px;
-}
-
-.scan-stats {
-    display: flex;
-    gap: 24px;
-    margin-bottom: 12px;
-}
-
-.stat-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.stat-value {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--k-color-primary);
-}
-
-.stat-label {
-    font-size: 12px;
-    color: var(--k-text-light);
 }
 
 .subfolder-list {

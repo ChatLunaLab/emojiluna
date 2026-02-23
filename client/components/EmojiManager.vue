@@ -91,73 +91,24 @@
                         <el-icon><FolderAdd /></el-icon>
                     </el-button>
 
-                    <!-- AI Stats -->
+                    <!-- AI Stats single button -->
                     <el-tooltip
-                        :content="
-                            aiStats.paused
-                                ? t('emojiluna.aiPaused')
-                                : t('emojiluna.aiConsole')
-                        "
+                        :content="t('emojiluna.aiTasksDetails', 'AI 任务详情')"
                         placement="bottom"
                     >
-                        <div>
-                            <el-tag
-                                v-if="totalTasks > 0"
-                                :type="statusTagType"
-                                class="ai-status-tag"
-                                effect="light"
-                                round
+                        <el-badge :value="aiStats.failed || aiStats.processing" :type="aiStats.failed ? 'danger' : 'primary'" :hidden="totalTasks === 0">
+                            <el-button
+                                circle
                                 @click="aiControlVisible = true"
+                                :class="{'running-animation': aiStats.processing > 0 && !aiStats.paused}"
+                                :title="t('emojiluna.aiTasksDetails', 'AI 任务详情')"
                             >
-                                <div class="ai-status-tag-content">
-                                    <!-- Icon Status -->
-                                    <el-icon v-if="aiStats.paused">
-                                        <VideoPause />
-                                    </el-icon>
-                                    <el-icon
-                                        v-else-if="aiStats.processing > 0"
-                                        class="is-loading"
-                                    >
-                                        <Loading />
-                                    </el-icon>
-                                    <el-icon v-else><Check /></el-icon>
-
-                                    <!-- Text Status -->
-                                    <span v-if="aiStats.paused">
-                                        {{ t('emojiluna.aiPaused') }}
-                                    </span>
-                                    <span v-else-if="aiStats.processing > 0">
-                                        {{ t('emojiluna.aiRunning') }}
-                                    </span>
-                                    <span v-else>
-                                        {{ t('emojiluna.aiIdle') }}
-                                    </span>
-                                </div>
-
-                                <div class="ai-status-tag-counts">
-                                    <!-- Counts -->
-                                    <span :title="t('emojiluna.aiPending')">
-                                        {{ t('emojiluna.aiPending') }}:{{
-                                            aiStats.pending
-                                        }}
-                                    </span>
-                                    <span :title="t('emojiluna.aiSucceeded')">
-                                        {{ t('emojiluna.aiSucceeded') }}:{{
-                                            aiStats.succeeded
-                                        }}
-                                    </span>
-                                    <span
-                                        v-if="aiStats.failed > 0"
-                                        :title="t('emojiluna.aiFailed')"
-                                        class="failed-count"
-                                    >
-                                        {{ t('emojiluna.aiFailed') }}:{{
-                                            aiStats.failed
-                                        }}
-                                    </span>
-                                </div>
-                            </el-tag>
-                        </div>
+                                <el-icon>
+                                    <MagicStick v-if="!aiStats.paused" />
+                                    <VideoPause v-else />
+                                </el-icon>
+                            </el-button>
+                        </el-badge>
                     </el-tooltip>
                 </div>
             </div>
@@ -443,39 +394,13 @@
             </template>
         </el-dialog>
 
-        <!-- AI Control Panel -->
-        <el-dialog
+        <!-- AI Control Panel (Replaced by AiTasksDialog) -->
+        <AiTasksDialog
             v-model="aiControlVisible"
-            :title="t('emojiluna.aiConsole')"
-            width="500px"
-        >
-            <el-form label-width="120px">
-                <el-form-item :label="t('emojiluna.aiTotalSwitch')">
-                    <el-switch
-                        v-model="aiStats.paused"
-                        :active-text="t('emojiluna.aiPaused')"
-                        :inactive-text="t('emojiluna.aiRunning')"
-                        style="
-                            --el-switch-on-color: #ff4949;
-                            --el-switch-off-color: #13ce66;
-                        "
-                        @change="onAiPausedChange"
-                    />
-                </el-form-item>
-                <el-divider>{{ t('emojiluna.aiErrorHandling') }}</el-divider>
-                <el-form-item :label="t('emojiluna.aiFailedTasks')">
-                    <el-tag type="danger">{{ aiStats.failed }}</el-tag>
-                    <el-button
-                        type="danger"
-                        link
-                        @click="retryFailedTasks"
-                        :disabled="aiStats.failed === 0"
-                    >
-                        {{ t('emojiluna.aiRetryFailed') }}
-                    </el-button>
-                </el-form-item>
-            </el-form>
-        </el-dialog>
+            v-model:paused="aiStats.paused"
+            :base-url="baseUrl"
+            @refresh-stats="updateAiStats"
+        />
     </div>
 </template>
 
@@ -503,6 +428,7 @@ import EmojiCard from './EmojiCard.vue'
 import EmojiDialog from './EmojiDialog.vue'
 import AddEmojiDialog from './AddEmojiDialog.vue'
 import FolderImportDialog from './FolderImportDialog.vue'
+import AiTasksDialog from './AiTasksDialog.vue'
 import type {
     EmojiItem,
     Category,
@@ -570,6 +496,7 @@ const aiStats = ref({
     paused: false
 })
 const aiControlVisible = ref(false)
+const shouldRefreshWhenAiIdle = ref(false)
 
 let aiStatsTimer: any = null
 
@@ -672,6 +599,11 @@ const updateAiStats = async () => {
         const stats = await send('emojiluna/getAiTaskStats')
         if (stats) {
             aiStats.value = stats
+            const aiBusy = (stats.pending || 0) + (stats.processing || 0) > 0
+            if (shouldRefreshWhenAiIdle.value && !aiBusy) {
+                shouldRefreshWhenAiIdle.value = false
+                await refreshData()
+            }
         }
         // refresh failed emoji ids as well
         try {
@@ -686,27 +618,13 @@ const updateAiStats = async () => {
     }
 }
 
-const retryFailedTasks = async () => {
-    try {
-        const count = await send('emojiluna/retryFailedTasks')
-        ElMessage.success(`已重试 ${count} 个失败任务`)
-        updateAiStats()
-    } catch (e) {
-        ElMessage.error(`重试失败: ${e.message}`)
-    }
-}
-
-const onAiPausedChange = async (val: boolean) => {
-    const prev = aiStats.value.paused
-    // optimistic update already applied by v-model, keep local copy
-    try {
-        await send('emojiluna/setAiPaused', !!val)
-        ElMessage.success(val ? 'AI 已暂停' : 'AI 已恢复')
-        updateAiStats()
-    } catch (e) {
-        // rollback
-        aiStats.value.paused = prev
-        ElMessage.error(`设置失败: ${e?.message || e}`)
+const scheduleRefreshWhenAiDone = async () => {
+    await updateAiStats()
+    const aiBusy = aiStats.value.pending + aiStats.value.processing > 0
+    if (aiBusy) {
+        shouldRefreshWhenAiIdle.value = true
+    } else {
+        await refreshData()
     }
 }
 
@@ -731,7 +649,7 @@ const handleBatchReanalyze = async () => {
     try {
         const count = await send('emojiluna/reanalyzeBatch', ids)
         ElMessage.success(`已提交 ${count} 个表情包到 AI 分析队列`)
-        updateAiStats()
+        await scheduleRefreshWhenAiDone()
         // Clear selection if needed
         isSelectionMode.value = false
         selectedEmojis.value = []
@@ -917,7 +835,7 @@ const confirmMove = async () => {
 }
 
 const handleAddSuccess = () => {
-    refreshData()
+    scheduleRefreshWhenAiDone()
 }
 
 const handleEditSuccess = () => {
@@ -925,7 +843,7 @@ const handleEditSuccess = () => {
 }
 
 const handleFolderImportSuccess = () => {
-    refreshData()
+    scheduleRefreshWhenAiDone()
 }
 
 const handlePreviewClose = () => {
@@ -994,11 +912,11 @@ const handleAIAnalyze = async () => {
                     previewEmoji.value.category = newData.category
                     previewEmoji.value.tags = newData.tags
                 }
-
-                await refreshData()
             } else {
                 ElMessage.info('没有检测到需要更新的内容')
             }
+
+            await refreshData()
         } else {
             ElMessage.info(result.message || 'AI分析未返回结果')
         }
@@ -1170,6 +1088,20 @@ const getStatus = (emoji: EmojiItem): 'pending' | 'failed' | undefined => {
 .slide-up-leave-to {
     transform: translate(-50%, 100%);
     opacity: 0;
+}
+
+.running-animation :deep(.el-icon) {
+    animation: rotate 2s linear infinite;
+    color: var(--el-color-primary);
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Preview Dialog Styles */

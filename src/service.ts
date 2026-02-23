@@ -15,7 +15,8 @@ import {
     FolderScanResult,
     ImageContentType,
     PaginatedResult,
-    ScannedFile
+    ScannedFile,
+    AITaskDetail
 } from './types'
 import {
     chunkArray,
@@ -354,7 +355,7 @@ export class EmojiLunaService extends Service {
         if (validationError) {
             try {
                 await fs.unlink(sourcePath)
-            } catch (_) {}
+            } catch (_) { }
             throw new Error(validationError)
         }
 
@@ -1339,6 +1340,18 @@ export class EmojiLunaService extends Service {
 
     async reanalyzeBatch(ids: string[]): Promise<number> {
         return this._uploadManager.reanalyzeBatch(ids)
+    }
+
+    async getAiTasksAll(): Promise<AITaskDetail[]> {
+        return this._uploadManager.getAiTasksAll()
+    }
+
+    async deleteAiTask(emojiId: string): Promise<void> {
+        this._uploadManager.deleteAiTask(emojiId)
+    }
+
+    async retryAiTask(emojiId: string): Promise<void> {
+        await this._uploadManager.retryAiTask(emojiId)
     }
 
     static inject = ['database', 'chatluna']

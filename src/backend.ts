@@ -5,10 +5,10 @@ import {
     EmojiSearchOptions,
     FolderImportOptions
 } from '.'
-import type {} from '@koishijs/plugin-server'
+import type { } from '@koishijs/plugin-server'
 import Koa from 'koa'
 import fs from 'fs/promises'
-import type {} from '@koishijs/plugin-console'
+import type { } from '@koishijs/plugin-console'
 import { resolve } from 'path'
 import { getImageType } from './utils'
 import formidable from 'formidable'
@@ -304,6 +304,18 @@ export async function applyBackend(ctx: Context, runtimeConfig: Config) {
 
         ctx.console.addListener('emojiluna/retryFailedTasks', async () => {
             return await ctx.emojiluna.retryFailedTasks()
+        })
+
+        ctx.console.addListener('emojiluna/getAiTasksAll', async () => {
+            return await ctx.emojiluna.getAiTasksAll()
+        })
+
+        ctx.console.addListener('emojiluna/deleteAiTask', async (emojiId: string) => {
+            return await ctx.emojiluna.deleteAiTask(emojiId)
+        })
+
+        ctx.console.addListener('emojiluna/retryAiTask', async (emojiId: string) => {
+            return await ctx.emojiluna.retryAiTask(emojiId)
         })
 
         // Folder import endpoints

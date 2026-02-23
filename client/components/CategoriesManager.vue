@@ -19,6 +19,15 @@
 
                 <div class="actions-section">
                     <el-button
+                        :type="isSelectionMode ? 'danger' : 'default'"
+                        circle
+                        @click="toggleSelectionMode"
+                        :title="isSelectionMode ? t('common.cancel') : '选择'"
+                    >
+                        <el-icon v-if="isSelectionMode"><Close /></el-icon>
+                        <el-icon v-else><Check /></el-icon>
+                    </el-button>
+                    <el-button
                         type="primary"
                         circle
                         @click="showAddDialog = true"
@@ -44,6 +53,7 @@
                     v-for="category in filteredCategories"
                     :key="category.id"
                     class="album-card"
+                    :class="{ selected: isSelected(category) }"
                     @click="handleCategoryClick(category)"
                 >
                     <div class="album-cover">
@@ -58,8 +68,16 @@
                             <el-icon :size="48"><FolderOpened /></el-icon>
                         </div>
 
+                        <div v-if="isSelectionMode" class="selection-badge">
+                            <el-icon><Check /></el-icon>
+                        </div>
+
                         <!-- Hover Actions -->
-                        <div class="album-actions" @click.stop>
+                        <div
+                            class="album-actions"
+                            @click.stop
+                            v-if="!isSelectionMode"
+                        >
                             <el-dropdown
                                 trigger="click"
                                 @command="(cmd) => handleCommand(cmd, category)"
@@ -76,7 +94,6 @@
                                         <el-dropdown-item
                                             command="delete"
                                             class="danger-item"
-                                            :disabled="category.emojiCount > 0"
                                         >
                                             <el-icon><Delete /></el-icon>
                                             删除
@@ -113,6 +130,28 @@
                 background
             />
         </div>
+
+        <Transition name="slide-up">
+            <div
+                class="floating-action-bar"
+                v-if="isSelectionMode && selectedCategories.length > 0"
+            >
+                <div class="selection-count">
+                    已选择 {{ selectedCategories.length }} 个分类
+                </div>
+                <div class="selection-actions">
+                    <el-button
+                        type="danger"
+                        text
+                        bg
+                        @click="handleBatchDeleteCategories"
+                    >
+                        <el-icon><Delete /></el-icon>
+                        删除
+                    </el-button>
+                </div>
+            </div>
+        </Transition>
 
         <!-- Add/Edit Dialog -->
         <el-dialog
@@ -176,7 +215,9 @@ import {
     FolderOpened,
     MoreFilled,
     Edit,
-    Delete
+    Delete,
+    Check,
+    Close
 } from '@element-plus/icons-vue'
 import type { Category, EmojiItem } from 'koishi-plugin-emojiluna'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -197,6 +238,8 @@ const baseUrl = ref('/emojiluna')
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(24)
+const isSelectionMode = ref(false)
+const selectedCategoryIds = ref<Set<string>>(new Set())
 
 // Dialog State
 const showAddDialog = ref(false)
@@ -236,6 +279,12 @@ const filteredCategories = computed(() => {
     )
 })
 
+const selectedCategories = computed(() => {
+    return categories.value.filter((cat) =>
+        selectedCategoryIds.value.has(cat.id)
+    )
+})
+
 // Methods
 const loadCategories = async () => {
     loading.value = true
@@ -253,6 +302,13 @@ const loadCategories = async () => {
         total.value = categoriesPage?.total || 0
         baseUrl.value = baseUrlData || '/emojiluna'
         categoryCovers.value = {}
+
+        const currentIds = new Set(categories.value.map((cat) => cat.id))
+        selectedCategoryIds.value = new Set(
+            Array.from(selectedCategoryIds.value).filter((id) =>
+                currentIds.has(id)
+            )
+        )
     } catch (error) {
         console.error('Failed to load categories:', error)
         ElMessage.error('加载分类失败')
@@ -317,7 +373,31 @@ const handleImageError = (event: Event) => {
 }
 
 const handleCategoryClick = (category: Category) => {
+    if (isSelectionMode.value) {
+        handleCategorySelect(category)
+        return
+    }
+
     emit('category-click', category)
+}
+
+const toggleSelectionMode = () => {
+    isSelectionMode.value = !isSelectionMode.value
+    selectedCategoryIds.value = new Set()
+}
+
+const isSelected = (category: Category) => {
+    return selectedCategoryIds.value.has(category.id)
+}
+
+const handleCategorySelect = (category: Category) => {
+    const next = new Set(selectedCategoryIds.value)
+    if (next.has(category.id)) {
+        next.delete(category.id)
+    } else {
+        next.add(category.id)
+    }
+    selectedCategoryIds.value = next
 }
 
 const handleCommand = (command: string, category: Category) => {
@@ -347,13 +427,55 @@ const handleDeleteCategory = async (category: Category) => {
             }
         )
 
-        await send('emojiluna/deleteCategory', category.id)
+        await send(
+            'emojiluna/deleteCategory',
+            category.id,
+            category.emojiCount > 0
+        )
         ElMessage.success('分类删除成功')
         loadCategories()
     } catch (error) {
         if (error !== 'cancel') {
             console.error('Failed to delete category:', error)
-            ElMessage.error('删除失败：可能分类不为空')
+            ElMessage.error('删除分类失败')
+        }
+    }
+}
+
+const handleBatchDeleteCategories = async () => {
+    if (selectedCategories.value.length === 0) return
+
+    const selected = selectedCategories.value
+    const emojiCount = selected.reduce(
+        (sum, item) => sum + (item.emojiCount || 0),
+        0
+    )
+
+    try {
+        await ElMessageBox.confirm(
+            `确定要删除选中的 ${selected.length} 个分类吗？${emojiCount > 0 ? `\n将同步删除这些分类下的 ${emojiCount} 个表情包。` : ''}`,
+            '警告',
+            {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                type: 'warning'
+            }
+        )
+
+        await Promise.all(
+            selected.map((item) =>
+                send('emojiluna/deleteCategory', item.id, item.emojiCount > 0)
+            )
+        )
+
+        ElMessage.success('批量删除分类成功')
+        selectedCategoryIds.value = new Set()
+        isSelectionMode.value = false
+        await loadCategories()
+    } catch (error) {
+        if (error !== 'cancel') {
+            console.error('Failed to batch delete categories:', error)
+            ElMessage.error('批量删除分类失败')
         }
     }
 }
@@ -477,6 +599,12 @@ onMounted(() => {
     transform: translateY(-4px);
 }
 
+.album-card.selected .album-cover {
+    box-shadow:
+        0 0 0 2px var(--k-color-primary),
+        0 6px 12px rgba(0, 0, 0, 0.12);
+}
+
 .album-cover {
     width: 100%;
     aspect-ratio: 1;
@@ -499,6 +627,28 @@ onMounted(() => {
 
 .cover-placeholder {
     color: var(--k-text-light);
+}
+
+.selection-badge {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--k-color-base), transparent 8%);
+    border: 1px solid var(--k-color-divider);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    transition: all 0.2s ease;
+}
+
+.album-card.selected .selection-badge {
+    color: #fff;
+    background: var(--k-color-primary);
+    border-color: var(--k-color-primary);
 }
 
 .album-info {
@@ -562,5 +712,42 @@ onMounted(() => {
     display: flex;
     justify-content: center;
     padding: 20px 0;
+}
+
+.floating-action-bar {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--k-color-base);
+    border: 1px solid var(--k-color-divider);
+    border-radius: 12px;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+}
+
+.selection-count {
+    font-weight: 600;
+    color: var(--k-color-text);
+}
+
+.selection-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.slide-up-enter-active,
+.slide-up-leave-active {
+    transition: all 0.3s ease;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+    transform: translate(-50%, 100%);
+    opacity: 0;
 }
 </style>

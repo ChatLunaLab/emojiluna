@@ -503,11 +503,7 @@ const handleDeleteCurrentCategory = async () => {
             type: 'warning'
         })
 
-        await send(
-            'emojiluna/deleteCategory',
-            props.category.id,
-            emojiCount > 0
-        )
+        await send('emojiluna/deleteCategory', props.category.id)
         ElMessage.success('分类删除成功')
         emit('back')
     } catch (error) {
@@ -515,8 +511,6 @@ const handleDeleteCurrentCategory = async () => {
             console.error('Failed to delete category:', error)
             ElMessage.error('删除分类失败')
         }
-    }
-}
     }
 }
 
@@ -705,11 +699,11 @@ const handleAIAnalyze = async () => {
                     previewEmoji.value.category = newData.category
                     previewEmoji.value.tags = newData.tags
                 }
-
-                await refreshData()
             } else {
                 ElMessage.info('没有检测到需要更新的内容')
             }
+
+            await refreshData()
         } else {
             ElMessage.info(result.message || 'AI分析未返回结果')
         }

@@ -19,6 +19,15 @@
 
                 <div class="actions-section">
                     <el-button
+                        :type="isSelectionMode ? 'danger' : 'default'"
+                        circle
+                        @click="toggleSelectionMode"
+                        :title="isSelectionMode ? '取消选择' : '选择'"
+                    >
+                        <el-icon v-if="isSelectionMode"><Close /></el-icon>
+                        <el-icon v-else><Check /></el-icon>
+                    </el-button>
+                    <el-button
                         type="primary"
                         circle
                         @click="showAddDialog = true"
@@ -40,6 +49,7 @@
                     v-for="tag in filteredTags"
                     :key="tag.name"
                     class="album-card"
+                    :class="{ selected: isSelected(tag) }"
                     @click="handleTagClick(tag)"
                 >
                     <div class="album-cover">
@@ -54,8 +64,16 @@
                             <el-icon :size="48"><PriceTag /></el-icon>
                         </div>
 
+                        <div v-if="isSelectionMode" class="selection-badge">
+                            <el-icon><Check /></el-icon>
+                        </div>
+
                         <!-- Hover Actions -->
-                        <div class="album-actions" @click.stop>
+                        <div
+                            class="album-actions"
+                            @click.stop
+                            v-if="!isSelectionMode"
+                        >
                             <el-dropdown
                                 trigger="click"
                                 @command="(cmd) => handleCommand(cmd, tag)"
@@ -93,6 +111,28 @@
                 <el-empty description="暂无标签" />
             </div>
         </div>
+
+        <Transition name="slide-up">
+            <div
+                class="floating-action-bar"
+                v-if="isSelectionMode && selectedTags.length > 0"
+            >
+                <div class="selection-count">
+                    已选择 {{ selectedTags.length }} 个标签
+                </div>
+                <div class="selection-actions">
+                    <el-button
+                        type="danger"
+                        text
+                        bg
+                        @click="handleBatchDeleteTags"
+                    >
+                        <el-icon><Delete /></el-icon>
+                        删除
+                    </el-button>
+                </div>
+            </div>
+        </Transition>
 
         <!-- Add/Edit Tag Dialog -->
         <el-dialog
@@ -144,7 +184,9 @@ import {
     PriceTag,
     MoreFilled,
     Edit,
-    Delete
+    Delete,
+    Check,
+    Close
 } from '@element-plus/icons-vue'
 import type { EmojiItem } from 'koishi-plugin-emojiluna'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -165,6 +207,8 @@ const tags = ref<TagInfo[]>([])
 const tagCovers = ref<Record<string, EmojiItem>>({})
 const searchKeyword = ref('')
 const baseUrl = ref('/emojiluna')
+const isSelectionMode = ref(false)
+const selectedTagNames = ref<Set<string>>(new Set())
 
 // Dialog State
 const showAddDialog = ref(false)
@@ -195,6 +239,10 @@ const filteredTags = computed(() => {
     return tags.value.filter((tag) =>
         tag.name.toLowerCase().includes(searchKeyword.value.toLowerCase())
     )
+})
+
+const selectedTags = computed(() => {
+    return tags.value.filter((tag) => selectedTagNames.value.has(tag.name))
 })
 
 // Methods
@@ -235,6 +283,13 @@ const loadTags = async () => {
             }))
             .sort((a, b) => b.usage - a.usage)
 
+        const currentNames = new Set(tags.value.map((tag) => tag.name))
+        selectedTagNames.value = new Set(
+            Array.from(selectedTagNames.value).filter((name) =>
+                currentNames.has(name)
+            )
+        )
+
         // Set covers
         tagFirstEmoji.forEach((emoji, tag) => {
             tagCovers.value[tag] = emoji
@@ -268,7 +323,57 @@ const handleImageError = (event: Event) => {
 }
 
 const handleTagClick = (tag: TagInfo) => {
+    if (isSelectionMode.value) {
+        handleTagSelect(tag)
+        return
+    }
+
     emit('tag-click', tag.name)
+}
+
+const toggleSelectionMode = () => {
+    isSelectionMode.value = !isSelectionMode.value
+    selectedTagNames.value = new Set()
+}
+
+const isSelected = (tag: TagInfo) => {
+    return selectedTagNames.value.has(tag.name)
+}
+
+const handleTagSelect = (tag: TagInfo) => {
+    const next = new Set(selectedTagNames.value)
+    if (next.has(tag.name)) {
+        next.delete(tag.name)
+    } else {
+        next.add(tag.name)
+    }
+    selectedTagNames.value = next
+}
+
+const removeTagsFromEmojis = async (tagNames: string[]) => {
+    const tagNameSet = new Set(tagNames)
+    const emojiMap = new Map<string, EmojiItem>()
+
+    for (const tagName of tagNames) {
+        const emojisWithTag: EmojiItem[] =
+            (await send('emojiluna/getEmojiList', { tags: [tagName] })) || []
+
+        for (const emoji of emojisWithTag) {
+            emojiMap.set(emoji.id, emoji)
+        }
+    }
+
+    const updates = Array.from(emojiMap.values())
+        .map((emoji) => {
+            const newTags = emoji.tags.filter((t) => !tagNameSet.has(t))
+            if (newTags.length === emoji.tags.length) {
+                return null
+            }
+            return send('emojiluna/updateEmojiTags', emoji.id, newTags)
+        })
+        .filter((task): task is Promise<unknown> => task !== null)
+
+    await Promise.all(updates)
 }
 
 const handleCommand = (command: string, tag: TagInfo) => {
@@ -297,17 +402,7 @@ const handleDeleteTag = async (tag: TagInfo) => {
             }
         )
 
-        // We need to remove this tag from all emojis
-        // Fetch emojis with this tag
-        const emojisWithTag = await send('emojiluna/getEmojiList', {
-            tags: [tag.name]
-        })
-        if (emojisWithTag) {
-            for (const emoji of emojisWithTag) {
-                const newTags = emoji.tags.filter((t: string) => t !== tag.name)
-                await send('emojiluna/updateEmojiTags', emoji.id, newTags)
-            }
-        }
+        await removeTagsFromEmojis([tag.name])
 
         ElMessage.success('标签删除成功')
         refreshData()
@@ -315,6 +410,34 @@ const handleDeleteTag = async (tag: TagInfo) => {
         if (error !== 'cancel') {
             console.error('Failed to delete tag:', error)
             ElMessage.error('删除标签失败')
+        }
+    }
+}
+
+const handleBatchDeleteTags = async () => {
+    if (selectedTags.value.length === 0) return
+
+    const selected = selectedTags.value.map((item) => item.name)
+    try {
+        await ElMessageBox.confirm(
+            `确定要删除选中的 ${selected.length} 个标签吗？\n这些标签将从关联表情包中移除。`,
+            '警告',
+            {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                type: 'warning'
+            }
+        )
+
+        await removeTagsFromEmojis(selected)
+        ElMessage.success('批量删除标签成功')
+        selectedTagNames.value = new Set()
+        isSelectionMode.value = false
+        await loadTags()
+    } catch (error) {
+        if (error !== 'cancel') {
+            console.error('Failed to batch delete tags:', error)
+            ElMessage.error('批量删除标签失败')
         }
     }
 }
@@ -445,6 +568,12 @@ onMounted(() => {
     transform: translateY(-4px);
 }
 
+.album-card.selected .album-cover {
+    box-shadow:
+        0 0 0 2px var(--k-color-primary),
+        0 6px 12px rgba(0, 0, 0, 0.12);
+}
+
 .album-cover {
     width: 100%;
     aspect-ratio: 1;
@@ -467,6 +596,28 @@ onMounted(() => {
 
 .cover-placeholder {
     color: var(--k-text-light);
+}
+
+.selection-badge {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--k-color-base), transparent 8%);
+    border: 1px solid var(--k-color-divider);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    transition: all 0.2s ease;
+}
+
+.album-card.selected .selection-badge {
+    color: #fff;
+    background: var(--k-color-primary);
+    border-color: var(--k-color-primary);
 }
 
 .album-info {
@@ -524,5 +675,42 @@ onMounted(() => {
 
 .no-data {
     margin-top: 40px;
+}
+
+.floating-action-bar {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--k-color-base);
+    border: 1px solid var(--k-color-divider);
+    border-radius: 12px;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+}
+
+.selection-count {
+    font-weight: 600;
+    color: var(--k-color-text);
+}
+
+.selection-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.slide-up-enter-active,
+.slide-up-leave-active {
+    transition: all 0.3s ease;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+    transform: translate(-50%, 100%);
+    opacity: 0;
 }
 </style>

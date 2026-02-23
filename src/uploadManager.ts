@@ -1,5 +1,6 @@
 import { Context } from 'koishi'
 import { Config } from './config'
+import { AITaskDetail } from './types'
 import fs from 'fs/promises'
 import path from 'path'
 import { createHash, randomUUID } from 'crypto'
@@ -69,8 +70,7 @@ export class UploadManager {
     private _aiTaskQueue: AITask[] = []
     private _processingSet: Set<string> = new Set()
     private _localActiveCount = 0
-    private _aiSucceededCount = 0
-    private _aiFailedIds: Set<string> = new Set()
+    private _aiTasksMap: Map<string, AITaskDetail> = new Map()
     private _isDisposed = false
     private _taskProcessor: AITaskProcessor | null = null
 
@@ -191,7 +191,7 @@ export class UploadManager {
 
         try {
             await fs.mkdir(tempDir, { recursive: true })
-        } catch (_) {}
+        } catch (_) { }
 
         const tempPath = path.join(tempDir, `${id}-upload-temp`)
         await fs.writeFile(tempPath, imageData)
@@ -211,7 +211,7 @@ export class UploadManager {
                 await fs.copyFile(sourcePath, destPath)
                 try {
                     await fs.unlink(sourcePath)
-                } catch (_) {}
+                } catch (_) { }
             } else {
                 throw error
             }
@@ -224,7 +224,7 @@ export class UploadManager {
     async cleanupTempFile(tempPath: string): Promise<void> {
         try {
             await fs.unlink(tempPath)
-        } catch (_) {}
+        } catch (_) { }
     }
 
     /**
@@ -305,12 +305,20 @@ export class UploadManager {
         imagePath: string,
         imageHash: string
     ): void {
+        const id = randomUUID()
         this._aiTaskQueue.push({
-            id: randomUUID(),
+            id,
             emojiId,
             imagePath,
             imageHash,
             attempts: 0
+        })
+
+        this._aiTasksMap.set(emojiId, {
+            id,
+            emojiId,
+            status: 'pending',
+            createdAt: Date.now()
         })
     }
 
@@ -324,11 +332,18 @@ export class UploadManager {
         failed: number
         paused: boolean
     } {
+        let pending = 0, processing = 0, succeeded = 0, failed = 0
+        for (const task of this._aiTasksMap.values()) {
+            if (task.status === 'pending') pending++
+            else if (task.status === 'processing') processing++
+            else if (task.status === 'succeeded') succeeded++
+            else if (task.status === 'failed') failed++
+        }
         return {
-            pending: this._aiTaskQueue.length,
-            processing: this._processingSet.size,
-            succeeded: this._aiSucceededCount,
-            failed: this._aiFailedIds.size,
+            pending,
+            processing,
+            succeeded,
+            failed,
             paused: this._aiPaused
         }
     }
@@ -337,7 +352,33 @@ export class UploadManager {
      * Get list of emoji IDs that have failed AI analysis.
      */
     getFailedAIEmojiIds(): string[] {
-        return Array.from(this._aiFailedIds)
+        return Array.from(this._aiTasksMap.values())
+            .filter(t => t.status === 'failed')
+            .map(t => t.emojiId)
+    }
+
+    async getAiTasksAll(): Promise<AITaskDetail[]> {
+        const result = Array.from(this._aiTasksMap.values())
+        if (this._taskProcessor) {
+            for (const item of result) {
+                if (!item.name) {
+                    const emoji = await this._taskProcessor.getEmojiById(item.emojiId)
+                    if (emoji) {
+                        item.name = emoji.name
+                    }
+                }
+            }
+        }
+        return result.sort((a, b) => b.createdAt - a.createdAt)
+    }
+
+    deleteAiTask(emojiId: string): void {
+        this._aiTaskQueue = this._aiTaskQueue.filter(t => t.emojiId !== emojiId)
+        this._aiTasksMap.delete(emojiId)
+    }
+
+    async retryAiTask(emojiId: string): Promise<void> {
+        await this.reanalyzeBatch([emojiId])
     }
 
     /**
@@ -355,25 +396,11 @@ export class UploadManager {
     async retryFailedTasks(): Promise<number> {
         if (!this._taskProcessor) return 0
 
-        const failedIds = Array.from(this._aiFailedIds)
+        const failedIds = this.getFailedAIEmojiIds()
         if (failedIds.length === 0) return 0
 
-        for (const emojiId of failedIds) {
-            const emoji = await this._taskProcessor.getEmojiById(emojiId)
-            if (!emoji) continue
-
-            const buffer = await fs.readFile(emoji.path)
-            const hash = this.calculateHash(buffer)
-            this._aiTaskQueue.push({
-                id: randomUUID(),
-                emojiId,
-                imagePath: emoji.path,
-                imageHash: hash,
-                attempts: 0
-            })
-        }
-        this._aiFailedIds.clear()
-        return failedIds.length
+        const count = await this.reanalyzeBatch(failedIds)
+        return count
     }
 
     /**
@@ -395,12 +422,21 @@ export class UploadManager {
             const buffer = await fs.readFile(emoji.path)
             const hash = this.calculateHash(buffer)
 
+            const taskId = randomUUID()
             this._aiTaskQueue.push({
-                id: randomUUID(),
+                id: taskId,
                 emojiId: id,
                 imagePath: emoji.path,
                 imageHash: hash,
                 attempts: 0
+            })
+
+            this._aiTasksMap.set(id, {
+                id: taskId,
+                emojiId: id,
+                status: 'pending',
+                name: emoji.name,
+                createdAt: Date.now()
             })
             count++
         }
@@ -420,6 +456,10 @@ export class UploadManager {
         }
 
         this._processingSet.add(task.emojiId)
+
+        const detail = this._aiTasksMap.get(task.emojiId)
+        if (detail) detail.status = 'processing'
+
         try {
             const buffer = await fs.readFile(task.imagePath)
             const base64 = buffer.toString('base64')
@@ -450,11 +490,17 @@ export class UploadManager {
                 this.cacheAIResult(task.imageHash, result)
             }
 
-            this._aiSucceededCount++
+            if (detail) {
+                detail.status = 'succeeded'
+                detail.error = undefined
+            }
         } catch (err) {
             const attempts = (task.attempts || 0) + 1
             if (attempts >= this.config.AIMaxAttempts) {
-                this._aiFailedIds.add(task.emojiId)
+                if (detail) {
+                    detail.status = 'failed'
+                    detail.error = err?.message || String(err)
+                }
                 this.ctx.logger.warn(
                     `AI Task ${task.id} permanently failed after ${attempts} attempts: ${err?.message || err}`
                 )
@@ -464,6 +510,8 @@ export class UploadManager {
                 task.attempts = attempts
                 task.nextRetryAt = Date.now() + backoff
                 this._aiTaskQueue.push(task)
+                // revert to pending
+                if (detail) detail.status = 'pending'
             }
             this.ctx.logger.warn(
                 `AI Task ${task.id} failed: ${err?.message || err}`
