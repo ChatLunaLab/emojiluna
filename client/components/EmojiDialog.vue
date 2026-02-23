@@ -24,7 +24,7 @@
                 <div class="form-side">
                     <div class="form-group">
                         <label class="form-label">{{ t('emojiluna.emojiName') }}</label>
-                        <el-input v-model="form.name" disabled :placeholder="t('emojiluna.emojiName')">
+                        <el-input v-model="form.name" :placeholder="t('emojiluna.emojiName')">
                             <template #prefix>
                                 <el-icon><Picture /></el-icon>
                             </template>
@@ -172,9 +172,20 @@ const handleClose = () => {
 const handleSave = async () => {
     if (!props.emoji) return
 
+    const nextName = form.name.trim()
+    if (!nextName) {
+        ElMessage.warning(t('emojiluna.nameRequired'))
+        return
+    }
+
     loading.value = true
     try {
         const promises = []
+
+        // 更新名称
+        if (nextName !== props.emoji.name) {
+            promises.push(send('emojiluna/updateEmojiName', props.emoji.id, nextName))
+        }
 
         // 更新分类
         if (form.category !== props.emoji.category) {

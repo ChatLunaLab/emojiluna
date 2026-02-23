@@ -34,6 +34,7 @@ const messages = {
             enterImageUrl: '请输入图片 URL',
             previewArea: '预览区域',
             enterEmojiName: '给表情包起个名字',
+            nameRequired: '表情包名称不能为空',
             folderImport: {
                 title: '从文件夹导入',
                 folderPath: '文件夹路径',

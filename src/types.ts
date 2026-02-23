@@ -207,6 +207,10 @@ declare module '@koishijs/console' {
             options?: CategorySearchOptions
         ) => Promise<PaginatedResult<Category>>
         'emojiluna/getAllTags': () => Promise<string[]>
+        'emojiluna/updateEmojiName': (
+            id: string,
+            name: string
+        ) => Promise<boolean>
         'emojiluna/updateEmojiTags': (
             id: string,
             tags: string[]

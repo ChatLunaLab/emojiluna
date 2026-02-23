@@ -107,6 +107,13 @@ export async function applyBackend(ctx: Context, config: Config) {
         })
 
         ctx.console.addListener(
+            'emojiluna/updateEmojiName',
+            async (id, name) => {
+                return await ctx.emojiluna.updateEmojiName(id, name)
+            }
+        )
+
+        ctx.console.addListener(
             'emojiluna/updateEmojiTags',
             async (id, tags) => {
                 return await ctx.emojiluna.updateEmojiTags(id, tags)

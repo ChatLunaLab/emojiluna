@@ -785,6 +785,23 @@ export class EmojiLunaService extends Service {
         return true
     }
 
+    async updateEmojiName(id: string, name: string): Promise<boolean> {
+        const emoji = this._emojiStorage[id]
+        const nextName = name.trim()
+        if (!emoji || !nextName) return false
+
+        emoji.name = nextName
+        await this.ctx.database.upsert('emojiluna_emojis', [
+            {
+                id: emoji.id,
+                name: emoji.name
+            }
+        ])
+
+        this.ctx.emit('emojiluna/emoji-updated', emoji)
+        return true
+    }
+
     async updateEmojiCategory(id: string, category: string): Promise<boolean> {
         const emoji = this._emojiStorage[id]
         if (!emoji) return false
