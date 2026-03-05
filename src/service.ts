@@ -1423,11 +1423,11 @@ export class EmojiLunaService extends Service {
         if (!normalizedCategoryName) return
 
         const count = Object.values(this._emojiStorage).filter(
-            (emoji) => emoji.category === normalizedCategoryName
+            (emoji) => emoji.category.trim() === normalizedCategoryName
         ).length
 
         let category = Object.values(this._categories).find(
-            (cat) => cat.name === normalizedCategoryName
+            (cat) => cat.name.trim() === normalizedCategoryName
         )
 
         if (!category && count > 0) {
