@@ -866,10 +866,34 @@ export class EmojiLunaService extends Service {
     }
 
     async addCategory(name: string, description?: string): Promise<Category> {
+        const categoryName = name.trim()
+        if (!categoryName) {
+            throw new Error('分类名称不能为空')
+        }
+
+        const existingCategory = await this.getCategoryByName(categoryName)
+        if (existingCategory) {
+            if (
+                description !== undefined &&
+                description !== existingCategory.description
+            ) {
+                existingCategory.description = description
+                await this.ctx.database.upsert('emojiluna_categories', [
+                    {
+                        id: existingCategory.id,
+                        name: existingCategory.name,
+                        description: existingCategory.description
+                    }
+                ])
+            }
+
+            return existingCategory
+        }
+
         const id = generateId()
         const category: Category = {
             id,
-            name,
+            name: categoryName,
             description,
             emojiCount: 0,
             createdAt: new Date()
@@ -1088,9 +1112,13 @@ export class EmojiLunaService extends Service {
 
     async updateEmojiCategory(id: string, category: string): Promise<boolean> {
         const emoji = this._emojiStorage[id]
-        if (!emoji) return false
+        const nextCategory = category.trim()
+        if (!emoji || !nextCategory) return false
 
-        emoji.category = category
+        const oldCategory = emoji.category
+        if (oldCategory === nextCategory) return true
+
+        emoji.category = nextCategory
         await this.ctx.database.upsert('emojiluna_emojis', [
             {
                 id: emoji.id,
@@ -1098,6 +1126,8 @@ export class EmojiLunaService extends Service {
             }
         ])
 
+        await this.updateCategoryEmojiCount(oldCategory)
+        await this.updateCategoryEmojiCount(nextCategory)
         this.ctx.emit('emojiluna/emoji-updated', emoji)
         return true
     }
@@ -1389,13 +1419,21 @@ export class EmojiLunaService extends Service {
     }
 
     private async updateCategoryEmojiCount(categoryName: string) {
+        const normalizedCategoryName = categoryName.trim()
+        if (!normalizedCategoryName) return
+
         const count = Object.values(this._emojiStorage).filter(
-            (emoji) => emoji.category === categoryName
+            (emoji) => emoji.category.trim() === normalizedCategoryName
         ).length
 
-        const category = Object.values(this._categories).find(
-            (cat) => cat.name === categoryName
+        let category = Object.values(this._categories).find(
+            (cat) => cat.name.trim() === normalizedCategoryName
         )
+
+        if (!category && count > 0) {
+            category = await this.addCategory(normalizedCategoryName)
+        }
+
         if (category) {
             category.emojiCount = count
             await this.ctx.database.upsert('emojiluna_categories', [
