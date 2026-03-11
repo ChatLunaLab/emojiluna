@@ -1,10 +1,10 @@
 import { Context } from 'koishi'
-import { Config } from './config'
-import { AITaskDetail } from './types'
+import { Config } from '../config'
+import { AITaskDetail } from '../types'
 import fs from 'fs/promises'
 import path from 'path'
-import { createHash, randomUUID } from 'crypto'
-import { getImageType } from './utils'
+import { randomUUID } from 'crypto'
+import { getImageType, hashBuffer } from '../utils'
 
 interface AIAnalysisResult {
     name: string
@@ -123,13 +123,6 @@ export class UploadManager {
                 `UploadManager: Failed to load existing hashes: ${err?.message || err}`
             )
         }
-    }
-
-    /**
-     * Calculate SHA256 hash of buffer content.
-     */
-    calculateHash(buffer: Buffer): string {
-        return createHash('sha256').update(buffer).digest('hex')
     }
 
     /**
@@ -427,7 +420,7 @@ export class UploadManager {
             if (this._aiTaskQueue.some((t) => t.emojiId === id)) continue
 
             const buffer = await fs.readFile(emoji.path)
-            const hash = this.calculateHash(buffer)
+            const hash = hashBuffer(buffer)
 
             const taskId = randomUUID()
             this._aiTaskQueue.push({
@@ -517,7 +510,6 @@ export class UploadManager {
                 task.attempts = attempts
                 task.nextRetryAt = Date.now() + backoff
                 this._aiTaskQueue.push(task)
-                // revert to pending
                 if (detail) detail.status = 'pending'
             }
             this.ctx.logger.warn(

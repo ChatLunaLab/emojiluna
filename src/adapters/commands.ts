@@ -1,6 +1,6 @@
 import { Context, h } from 'koishi'
-import { Config } from './config'
-import { formatFileSize, getImageType, handleImageUpload } from './utils'
+import { Config } from '../config'
+import { formatFileSize, getImageType, handleImageUpload } from '../utils'
 import fs from 'fs/promises'
 
 export function applyCommands(ctx: Context, config: Config) {
@@ -110,9 +110,12 @@ export function applyCommands(ctx: Context, config: Config) {
                         const mimeType = getImageType(imageBuffer)
                         const base64 = imageBuffer.toString('base64')
 
-                        return `${options.offset + index + 1}. ${emoji.name} (${emoji.id})\n\n <img src="data:${mimeType};base64,${base64}" />\m\n   分类: ${emoji.category}\n   标签: ${
-                            emoji.tags.join(', ') || '无'
-                        }\n   大小: ${formatFileSize(emoji.size)}`
+                        const title = `${options.offset + index + 1}. ${emoji.name} (${emoji.id})`
+                        const image = `<img src="data:${mimeType};base64,${base64}" />`
+                        const tags = emoji.tags.join(', ') || '无'
+                        const size = formatFileSize(emoji.size)
+
+                        return `${title}\n\n ${image}\m\n   分类: ${emoji.category}\n   标签: ${tags}\n   大小: ${size}`
                     })
                 ).then((list) => list.join('\n\n'))
 

@@ -1,15 +1,15 @@
 import { Context, h, Session } from 'koishi'
-import { Config } from './config'
-import { ImageContentType } from './types'
+import { Config } from '../config'
+import { ImageContentType } from '../types'
 import {
     extractFrameRgba,
     getImageMetadata,
     ImageMetadata,
     resizeFrameToGrayscale,
     sampleFrameIndices
-} from './imageProcessor'
+} from '../image'
 import fs from 'fs/promises'
-import { hashBuffer } from './utils'
+import { hashBuffer } from '../utils'
 
 export interface AutoCollectOptions {
     minSize: number
@@ -112,7 +112,7 @@ export class AutoCollector {
                 for (const emoji of emojis) {
                     try {
                         const buffer = await fs.readFile(emoji.path)
-                        const hash = this.calculateImageHash(buffer)
+                        const hash = hashBuffer(buffer)
                         this.emojiHashes.add(hash)
 
                         const metadata = await getImageMetadata(buffer)
@@ -266,13 +266,11 @@ export class AutoCollector {
 
         const record = this.frequencyTracker.get(key)!
 
-        // Clean old timestamps outside the 10-minute window
         record.timestamps = record.timestamps.filter(
             (timestamp) =>
                 currentTime - timestamp <= AutoCollector.FREQUENCY_WINDOW
         )
 
-        // Add current timestamp
         record.timestamps.push(currentTime)
 
         return record.timestamps.length
@@ -282,13 +280,11 @@ export class AutoCollector {
         const currentTime = Date.now()
 
         for (const [key, record] of this.frequencyTracker.entries()) {
-            // Clean old timestamps
             record.timestamps = record.timestamps.filter(
                 (timestamp) =>
                     currentTime - timestamp <= AutoCollector.FREQUENCY_WINDOW
             )
 
-            // Remove records with no recent timestamps
             if (record.timestamps.length === 0) {
                 this.frequencyTracker.delete(key)
             }
@@ -302,7 +298,6 @@ export class AutoCollector {
                 return
             }
 
-            // First check if we should collect based on frequency
             const groupId = session.guildId || session.channelId
             const frequency = this.trackImageFrequency(imageInfo.hash, groupId)
 
@@ -319,7 +314,6 @@ export class AutoCollector {
                 return
             }
 
-            // AI image type filter
             if (this.options.enableImageTypeFilter) {
                 const imageBase64 = imageInfo.buffer.toString('base64')
                 const filterResult =
@@ -358,7 +352,7 @@ export class AutoCollector {
             return {
                 buffer: imageBuffer,
                 size: imageBuffer.length,
-                hash: this.calculateImageHash(imageBuffer),
+                hash: hashBuffer(imageBuffer),
                 metadata
             }
         } catch (error) {
@@ -386,10 +380,6 @@ export class AutoCollector {
         }
 
         return true
-    }
-
-    private calculateImageHash(buffer: Buffer): string {
-        return hashBuffer(buffer)
     }
 
     private async extractImageFeatures(
@@ -591,8 +581,7 @@ export class AutoCollector {
                 imageInfo.metadata
             )
 
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            for (const [_, existingFeatures] of this.imageFeatures) {
+            for (const existingFeatures of this.imageFeatures.values()) {
                 const similarity = this.calculateSimilarityScore(
                     newFeatures,
                     existingFeatures

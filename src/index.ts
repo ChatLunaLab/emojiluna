@@ -1,9 +1,8 @@
 import { Context } from 'koishi'
 import { Config } from './config'
-import { EmojiLunaService } from './service'
-import { applyCommands } from './commands'
-import { AutoCollector } from './autoCollector'
-import { applyBackend } from './backend'
+import { EmojiLunaService } from './services'
+import { applyBackend, applyCommands } from './adapters'
+import { AutoCollector } from './collectors'
 import { modelSchema } from 'koishi-plugin-chatluna/utils/schema'
 import { Category, EmojiItem, EmojiSearchOptions } from './types'
 
