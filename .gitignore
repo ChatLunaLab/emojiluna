@@ -9,3 +9,4 @@ dist/
 .env.production
 coverage/
 .nyc_output/
+.claude/*.local.*
