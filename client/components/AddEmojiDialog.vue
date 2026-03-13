@@ -471,7 +471,10 @@ const submitFile = async () => {
         }
 
         // 2) 准备上传唯一文件，使用原有的 upload worker 机制
-        const baseUrl = await send('emojiluna/getBaseUrl')
+        const [baseUrl, uploadToken] = await Promise.all([
+            send('emojiluna/getBaseUrl'),
+            send('emojiluna/getUploadToken' as any)
+        ])
         let uploadUrl = `${baseUrl}/upload`
         if (!uploadUrl.startsWith('http')) {
             uploadUrl = new URL(uploadUrl, window.location.origin).toString()
@@ -511,7 +514,12 @@ const submitFile = async () => {
                 reject(err)
             }
 
-            uploadWorker.postMessage({ files, url: uploadUrl, concurrency })
+            uploadWorker.postMessage({
+                files,
+                url: uploadUrl,
+                concurrency,
+                token: uploadToken || ''
+            })
         })
     } catch (err) {
         console.error('Upload worker setup failed:', err)

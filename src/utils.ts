@@ -1,5 +1,6 @@
 import { h, Session } from 'koishi'
 import crypto from 'crypto'
+import { detectImageFormat } from './image'
 
 export type ParseResult<T> = T | null
 
@@ -95,25 +96,9 @@ export async function handleImageUpload<T>(
 }
 
 export function getImageType(buffer: Buffer, pure: boolean = false): string {
-    const first10Bytes = new Uint8Array(buffer).slice(0, 10)
-    const type = Buffer.from(first10Bytes).toString('base64', 0, 10)
-    if (type.startsWith('iVBORw0KGgoAAAANSUhEUg')) {
-        return pure ? 'png' : 'image/png'
-    } else if (type.startsWith('/9j/4AAQSkZJRg')) {
-        return pure ? 'jpeg' : 'image/jpeg'
-    } else if (type.startsWith('R0lGOD')) {
-        return pure ? 'gif' : 'image/gif'
-    } else if (type.startsWith('UklGRg')) {
-        return pure ? 'webp' : 'image/webp'
-    }
-    return pure ? 'jpeg' : 'image/jpeg'
-}
-
-export function generateId(): string {
-    return (
-        Math.random().toString(36).substring(2, 15) +
-        Math.random().toString(36).substring(2, 15)
-    )
+    const format = detectImageFormat(buffer)
+    const type = format === 'unknown' ? 'jpeg' : format
+    return pure ? type : `image/${type}`
 }
 
 export function formatFileSize(bytes: number): string {
@@ -122,17 +107,6 @@ export function formatFileSize(bytes: number): string {
     const sizes = ['B', 'KB', 'MB', 'GB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
-
-export function chunkArray<T>(array: T[], size: number): T[][] {
-    return array.reduce((result, item, index) => {
-        const chunkIndex = Math.floor(index / size)
-        if (!result[chunkIndex]) {
-            result[chunkIndex] = []
-        }
-        result[chunkIndex].push(item)
-        return result
-    }, [] as T[][])
 }
 
 export function hashBuffer(buffer: Buffer): string {

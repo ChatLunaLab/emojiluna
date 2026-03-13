@@ -32,7 +32,7 @@ const toArrayBuffer = (buffer: Buffer): ArrayBuffer => {
     ) as ArrayBuffer
 }
 
-const detectImageFormat = (buffer: Buffer): string => {
+export function detectImageFormat(buffer: Buffer): string {
     const header = buffer.subarray(0, 12)
 
     if (header[0] === 0xff && header[1] === 0xd8) return 'jpeg'
@@ -144,17 +144,6 @@ export async function extractSampledFrames(
           }
 
     return { frames, metadata }
-}
-
-export async function extractFrameGrayscale(
-    buffer: Buffer,
-    metadata: ImageMetadata,
-    frameIndex: number,
-    targetWidth: number,
-    targetHeight: number
-): Promise<Uint8Array> {
-    const frame = await extractFrameRgba(buffer, metadata, frameIndex)
-    return resizeFrameToGrayscale(frame, targetWidth, targetHeight)
 }
 
 export async function extractFrameRgba(

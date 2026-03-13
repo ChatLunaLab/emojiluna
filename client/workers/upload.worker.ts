@@ -1,7 +1,7 @@
 const UPLOAD_TIMEOUT_MS = 30000 // 30 second timeout per file
 
 self.onmessage = async (e) => {
-    const { files, url, concurrency } = e.data
+    const { files, url, concurrency, token } = e.data
     let active = 0
     let index = 0
     let completed = 0
@@ -29,9 +29,15 @@ self.onmessage = async (e) => {
                     formData.append('tags', tags)
                     formData.append('aiAnalysis', aiAnalysis)
 
+                    const headers: Record<string, string> = {}
+                    if (token) {
+                        headers['x-upload-token'] = token
+                    }
+
                     const response = await fetch(url, {
                         method: 'POST',
-                        body: formData
+                        body: formData,
+                        headers
                     })
 
                     if (!response.ok) {

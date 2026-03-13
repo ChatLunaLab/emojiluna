@@ -1,6 +1,5 @@
 import { Context, h, Session } from 'koishi'
 import { Config } from '../config'
-import { ImageContentType } from '../types'
 import {
     extractFrameRgba,
     getImageMetadata,
@@ -10,20 +9,6 @@ import {
 } from '../image'
 import fs from 'fs/promises'
 import { hashBuffer } from '../utils'
-
-export interface AutoCollectOptions {
-    minSize: number
-    maxSize: number
-    similarityThreshold: number
-    whitelistGroups: string[]
-    emojiFrequencyThreshold: number
-    groupAutoCollectLimit: Record<
-        string,
-        { hourLimit: number; dayLimit: number }
-    >
-    enableImageTypeFilter: boolean
-    acceptedImageTypes: ImageContentType[]
-}
 
 export interface ImageInfo {
     buffer: Buffer
@@ -53,11 +38,9 @@ export interface FrequencyRecord {
 export class AutoCollector {
     private ctx: Context
     private config: Config
-    private options: AutoCollectOptions
-    private emojiHashes = new Set<string>()
     private imageFeatures = new Map<string, ImageFeatures>()
     private frequencyTracker = new Map<string, FrequencyRecord>()
-    private hashesReady: Promise<void>
+    private featuresReady: Promise<void>
     private static readonly MAX_HASHES = 10000
     private static readonly FREQUENCY_WINDOW = 10 * 60 * 1000 // 10 minutes in milliseconds
     private static readonly SIMILARITY_FRAME_SAMPLES = 5
@@ -79,24 +62,29 @@ export class AutoCollector {
     constructor(ctx: Context, config: Config) {
         this.ctx = ctx
         this.config = config
-        this.options = {
-            minSize: config.minEmojiSize,
-            maxSize: config.maxEmojiSize,
-            similarityThreshold: config.similarityThreshold,
-            whitelistGroups: config.whitelistGroups,
-            emojiFrequencyThreshold: config.emojiFrequencyThreshold,
-            groupAutoCollectLimit: config.groupAutoCollectLimit,
-            enableImageTypeFilter: config.enableImageTypeFilter,
-            acceptedImageTypes: config.acceptedImageTypes
-        }
-        this.hashesReady = this.loadExistingHashes()
+        this.featuresReady = this.loadExistingFeatures()
         this.registerCommands()
 
         ctx.setTimeout(() => this.cleanupFrequencyTracker(), 30 * 60 * 1000)
+
+        ctx.on('emojiluna/emoji-added', async (emoji) => {
+            try {
+                const buffer = await fs.readFile(emoji.path)
+                const hash = hashBuffer(buffer)
+                const metadata = await getImageMetadata(buffer)
+                const features = await this.extractImageFeatures(
+                    buffer,
+                    metadata
+                )
+                this.imageFeatures.set(hash, features)
+            } catch (_) {}
+        })
     }
 
-    private async loadExistingHashes() {
+    private async loadExistingFeatures() {
         try {
+            await this.ctx.emojiluna.ready
+
             const pageSize = 1000
             let offset = 0
 
@@ -113,8 +101,6 @@ export class AutoCollector {
                     try {
                         const buffer = await fs.readFile(emoji.path)
                         const hash = hashBuffer(buffer)
-                        this.emojiHashes.add(hash)
-
                         const metadata = await getImageMetadata(buffer)
                         const features = await this.extractImageFeatures(
                             buffer,
@@ -123,7 +109,7 @@ export class AutoCollector {
                         this.imageFeatures.set(hash, features)
                     } catch (error) {
                         this.ctx.logger.debug(
-                            `Failed to preload hash for emoji ${emoji.id}: ${error.message}`
+                            `Failed to preload features for emoji ${emoji.id}: ${error.message}`
                         )
                     }
                 }
@@ -133,11 +119,11 @@ export class AutoCollector {
             }
 
             this.ctx.logger.debug(
-                `Auto collector preloaded ${this.emojiHashes.size} emoji hashes`
+                `Auto collector preloaded ${this.imageFeatures.size} emoji features`
             )
         } catch (error) {
             this.ctx.logger.warn(
-                `Failed to load existing emoji hashes: ${error.message}`
+                `Failed to load existing emoji features: ${error.message}`
             )
         }
     }
@@ -149,11 +135,9 @@ export class AutoCollector {
         if (!this.groupAutoCollectLimit[groupId]) {
             this.groupAutoCollectLimit[groupId] = {
                 hourLimit:
-                    this.options.groupAutoCollectLimit[groupId]?.hourLimit ||
-                    20,
+                    this.config.groupAutoCollectLimit[groupId]?.hourLimit || 20,
                 dayLimit:
-                    this.options.groupAutoCollectLimit[groupId]?.dayLimit ||
-                    100,
+                    this.config.groupAutoCollectLimit[groupId]?.dayLimit || 100,
                 lastDayTimestamp: currentTime,
                 lastHourTimestamp: currentTime
             }
@@ -166,13 +150,13 @@ export class AutoCollector {
         if (hourPassed) {
             limit.lastHourTimestamp = currentTime
             limit.hourLimit =
-                this.options.groupAutoCollectLimit[groupId]?.hourLimit || 20
+                this.config.groupAutoCollectLimit[groupId]?.hourLimit || 20
         }
 
         if (dayPassed) {
             limit.lastDayTimestamp = currentTime
             limit.dayLimit =
-                this.options.groupAutoCollectLimit[groupId]?.dayLimit || 100
+                this.config.groupAutoCollectLimit[groupId]?.dayLimit || 100
         }
 
         if (limit.hourLimit <= 0 || limit.dayLimit <= 0) {
@@ -196,21 +180,21 @@ export class AutoCollector {
                 const stats = this.getStats()
                 let status = `自动获取状态:\n`
                 status += `状态: ${stats.isEnabled ? '运行中' : '已停止'}\n`
-                status += `最小大小: ${stats.options.minSize}KB\n`
-                status += `最大大小: ${stats.options.maxSize}MB\n`
-                status += `相似度阈值: ${stats.options.similarityThreshold}\n`
-                status += `频次阈值: ${stats.options.emojiFrequencyThreshold}次/10分钟\n`
-                status += `白名单群数: ${stats.options.whitelistGroups.length}\n`
-                status += `已记录哈希数: ${stats.totalHashes}\n`
+                status += `最小大小: ${this.config.minEmojiSize}KB\n`
+                status += `最大大小: ${this.config.maxEmojiSize}MB\n`
+                status += `相似度阈值: ${this.config.similarityThreshold}\n`
+                status += `频次阈值: ${this.config.emojiFrequencyThreshold}次/10分钟\n`
+                status += `白名单群数: ${this.config.whitelistGroups.length}\n`
+                status += `已记录特征数: ${stats.featureCount}\n`
                 status += `频率记录数: ${stats.frequencyRecords}\n`
-                status += `\n图片类型过滤: ${stats.imageTypeFilterEnabled ? '启用' : '禁用'}`
+                status += `\n图片类型过滤: ${this.config.enableImageTypeFilter ? '启用' : '禁用'}`
 
-                if (stats.imageTypeFilterEnabled) {
-                    status += `\n接受的图片类型: ${stats.acceptedImageTypes.join(', ')}`
+                if (this.config.enableImageTypeFilter) {
+                    status += `\n接受的图片类型: ${this.config.acceptedImageTypes.join(', ')}`
                 }
 
-                if (stats.options.whitelistGroups.length > 0) {
-                    status += `\n\n白名单群:\n${stats.options.whitelistGroups.join('\n')}`
+                if (this.config.whitelistGroups.length > 0) {
+                    status += `\n\n白名单群:\n${this.config.whitelistGroups.join('\n')}`
                 }
 
                 return status
@@ -226,7 +210,7 @@ export class AutoCollector {
         this.ctx.on('message', async (session: Session) => {
             if (!this.shouldProcessMessage(session)) return
 
-            await this.hashesReady
+            await this.featuresReady
 
             const images = h.select(session.elements, 'img')
             if (images.length === 0) return
@@ -249,7 +233,7 @@ export class AutoCollector {
     private shouldProcessMessage(session: Session): boolean {
         if (session.isDirect) return false
 
-        return this.options.whitelistGroups.includes(session.guildId)
+        return this.config.whitelistGroups.includes(session.guildId)
     }
 
     private trackImageFrequency(hash: string, groupId: string): number {
@@ -301,9 +285,9 @@ export class AutoCollector {
             const groupId = session.guildId || session.channelId
             const frequency = this.trackImageFrequency(imageInfo.hash, groupId)
 
-            if (frequency < this.options.emojiFrequencyThreshold) {
+            if (frequency < this.config.emojiFrequencyThreshold) {
                 this.ctx.logger.debug(
-                    `Skip auto-collect: frequency too low (${frequency}/${this.options.emojiFrequencyThreshold})`
+                    `Skip auto-collect: frequency too low (${frequency}/${this.config.emojiFrequencyThreshold})`
                 )
                 return
             }
@@ -314,7 +298,7 @@ export class AutoCollector {
                 return
             }
 
-            if (this.options.enableImageTypeFilter) {
+            if (this.config.enableImageTypeFilter) {
                 const imageBase64 = imageInfo.buffer.toString('base64')
                 const filterResult =
                     await this.ctx.emojiluna.filterImageByType(imageBase64)
@@ -365,16 +349,16 @@ export class AutoCollector {
         const sizeKB = size / 1024
         const sizeMB = sizeKB / 1024
 
-        if (sizeKB < this.options.minSize) {
+        if (sizeKB < this.config.minEmojiSize) {
             this.ctx.logger.debug(
-                `Skip auto-collect: image too small (${sizeKB.toFixed(2)}KB < ${this.options.minSize}KB)`
+                `Skip auto-collect: image too small (${sizeKB.toFixed(2)}KB < ${this.config.minEmojiSize}KB)`
             )
             return false
         }
 
-        if (sizeMB > this.options.maxSize) {
+        if (sizeMB > this.config.maxEmojiSize) {
             this.ctx.logger.debug(
-                `Skip auto-collect: image too large (${sizeMB.toFixed(2)}MB > ${this.options.maxSize}MB)`
+                `Skip auto-collect: image too large (${sizeMB.toFixed(2)}MB > ${this.config.maxEmojiSize}MB)`
             )
             return false
         }
@@ -587,9 +571,9 @@ export class AutoCollector {
                     existingFeatures
                 )
 
-                if (similarity >= this.options.similarityThreshold) {
+                if (similarity >= this.config.similarityThreshold) {
                     this.ctx.logger.debug(
-                        `Similar image found: similarity=${similarity.toFixed(3)}, threshold=${this.options.similarityThreshold}`
+                        `Similar image found: similarity=${similarity.toFixed(3)}, threshold=${this.config.similarityThreshold}`
                     )
                     return true
                 }
@@ -606,7 +590,7 @@ export class AutoCollector {
 
     private async saveEmoji(imageInfo: ImageInfo, session: Session) {
         try {
-            if (this.emojiHashes.has(imageInfo.hash)) {
+            if (this.ctx.emojiluna.uploadManager.hasHash(imageInfo.hash)) {
                 this.ctx.logger.debug(
                     'Skip auto-collect: duplicate hash already collected'
                 )
@@ -628,8 +612,6 @@ export class AutoCollector {
                 imageInfo.buffer
             )
 
-            this.emojiHashes.add(imageInfo.hash)
-
             const features = await this.extractImageFeatures(
                 imageInfo.buffer,
                 imageInfo.metadata
@@ -643,7 +625,7 @@ export class AutoCollector {
     private async getDuplicateReason(
         imageInfo: ImageInfo
     ): Promise<string | null> {
-        if (this.emojiHashes.has(imageInfo.hash)) {
+        if (this.ctx.emojiluna.uploadManager.hasHash(imageInfo.hash)) {
             return 'duplicate hash already collected'
         }
 
@@ -655,28 +637,11 @@ export class AutoCollector {
         return null
     }
 
-    public updateConfig(config: Config) {
-        this.config = config
-        this.options = {
-            minSize: config.minEmojiSize,
-            maxSize: config.maxEmojiSize,
-            similarityThreshold: config.similarityThreshold,
-            whitelistGroups: config.whitelistGroups,
-            emojiFrequencyThreshold: config.emojiFrequencyThreshold,
-            groupAutoCollectLimit: config.groupAutoCollectLimit,
-            enableImageTypeFilter: config.enableImageTypeFilter,
-            acceptedImageTypes: config.acceptedImageTypes
-        }
-    }
-
     public getStats() {
         return {
-            totalHashes: this.emojiHashes.size,
+            featureCount: this.imageFeatures.size,
             frequencyRecords: this.frequencyTracker.size,
-            isEnabled: this.config.autoCollect,
-            options: this.options,
-            imageTypeFilterEnabled: this.options.enableImageTypeFilter,
-            acceptedImageTypes: this.options.acceptedImageTypes
+            isEnabled: this.config.autoCollect
         }
     }
 }

@@ -162,6 +162,13 @@ export class UploadManager {
     }
 
     /**
+     * Check if a hash already exists in the tracked set.
+     */
+    hasHash(hash: string): boolean {
+        return this.emojiHashes.has(hash)
+    }
+
+    /**
      * Register an emoji after successful upload.
      */
     registerEmoji(id: string, imageHash: string): void {

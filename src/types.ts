@@ -284,6 +284,7 @@ declare module '@koishijs/console' {
         'emojiluna/cleanupEmptyTags': () => Promise<number>
         'emojiluna/addEmoji': (emojiData: EmojiAddOptions) => Promise<EmojiItem>
         'emojiluna/getBaseUrl': () => Promise<string>
+        'emojiluna/getUploadToken': () => Promise<string>
         'emojiluna/analyzeEmoji': (emojiId: string) => Promise<{
             success: boolean
             updates?: string[]
