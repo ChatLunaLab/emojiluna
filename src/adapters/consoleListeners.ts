@@ -13,7 +13,7 @@ export function applyConsoleListeners(ctx: Context, config: Config) {
 
         ctx.console.addEntry({
             dev: resolve(__dirname, '../../client/index.ts'),
-            prod: resolve(__dirname, '../../dist')
+            prod: resolve(__dirname, '../dist')
         })
 
         // Batch register simple passthrough listeners
